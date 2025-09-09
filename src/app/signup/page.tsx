@@ -37,7 +37,7 @@ const [healthMarkers, setHealthMarkers] = useState("");
     body.healthMarkers = healthMarkers;
   }
 
-  const res = await fetch("/api/users/request", {
+  const res = await fetch("/api/requests", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

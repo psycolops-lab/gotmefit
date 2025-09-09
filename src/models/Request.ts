@@ -1,15 +1,23 @@
-import mongoose from "mongoose";
+import mongoose, { Schema, Document } from "mongoose";
 
-const RequestSchema = new mongoose.Schema({
-  name: String,
+export interface IRequest extends Document {
+  email: string;
+  name: string;
+  role: "member" | "trainer" | "nutritionist";
+  gym?: mongoose.Types.ObjectId;
+  hashedPassword?: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const RequestSchema = new Schema<IRequest>({
   email: { type: String, required: true },
-  role: { type: String, enum: ["member","trainer","nutritionist"], required: true },
-  gym: { type: mongoose.Schema.Types.ObjectId, ref: "Gym" }, // gym they want to join (optional)
-  message: String, // optional note from requester
-  hashedPassword: String, // if the requester gives password we hash it; else admin will set password on approve
-  status: { type: String, enum: ["pending","approved","rejected"], default: "pending" },
-  createdAt: { type: Date, default: () => new Date() },
-  requestedByIp: String,
+  name: { type: String, required: true },
+  role: { type: String, required: true, enum: ["member", "trainer", "nutritionist"] },
+  gym: { type: Schema.Types.ObjectId, ref: "Gym" },
+  hashedPassword: String,
+  status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
 }, { timestamps: true });
 
-export default mongoose.models.Request || mongoose.model("Request", RequestSchema);
+export default mongoose.models.Request || mongoose.model<IRequest>("Request", RequestSchema);
