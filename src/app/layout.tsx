@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { ThemeProvider } from "@/components/theme-provider"
 
 
 export const metadata: Metadata = {
@@ -14,9 +14,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="bg-white text-slate-900">
-        <ThemeProvider >
+    <html lang="en" suppressHydrationWarning>
+      <body >
+        <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
         <Navbar />
         <main className="min-h-screen">{children}</main>
         </ThemeProvider>
