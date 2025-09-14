@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
+// ✅ Works with Vercel (avoid strict type on context)
 export async function DELETE(
   request: NextRequest,
-  context: { params: { id: string } }
-) {
+  { params }: { params: { id: string } }
+): Promise<NextResponse> {
   try {
-    const id = context.params.id;
+    const id = params?.id;
 
     if (!id) {
       return NextResponse.json({ error: "Gym ID required" }, { status: 400 });
