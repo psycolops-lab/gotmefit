@@ -1,45 +1,31 @@
+// src/app/api/requests/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { connect } from "@/dbConfig/dbConfig";
-import RequestModel from "@/models/Request";
-import Gym from "@/models/Gym";
-import User from "@/models/User";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-connect();
+type RequestRow = {
+  id: number;
+  email: string;
+  name?: string;
+  role: string;
+  gym_id?: number;
+};
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, name, role, gymId, password } = await req.json();
-    if (!email || !role) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-    }
+    const { email, name, role, gymId } = await req.json();
+    if (!email || !role) return NextResponse.json({ error: "Missing fields" }, { status: 400 });
 
-    if (gymId) {
-      const gym = await Gym.findById(gymId);
-      if (!gym) return NextResponse.json({ error: "Gym not found" }, { status: 404 });
-    }
+    const { data, error } = await supabaseAdmin
+      .from("requests")
+      .insert([{ email, name, role, gym_id: gymId }])
+      .select(); // Ensure data is returned
 
-    // Avoid duplicate pending requests
-    const existingReq = await RequestModel.findOne({ email, role, status: "pending" });
-    if (existingReq) return NextResponse.json({ error: "Request already pending" }, { status: 409 });
+    const typedData = data as RequestRow[] | null;
 
-    // Avoid duplicate user
-    const existingUser = await User.findOne({ email });
-    if (existingUser) return NextResponse.json({ error: "User already exists" }, { status: 409 });
-
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
-
-    const doc = await RequestModel.create({
-      email,
-      name,
-      role,
-      gym: gymId || undefined,
-      hashedPassword,
-      status: "pending", // 👈 explicitly set
-    });
-
-    return NextResponse.json({ message: "Request created", requestId: doc._id });
-  } catch (err: any) {
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!typedData || !typedData[0]) return NextResponse.json({ error: "No data returned" }, { status: 500 });
+    return NextResponse.json({ message: "Request created", id: typedData[0].id });
+  } catch (err:any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

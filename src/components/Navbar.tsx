@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
+import { supabase } from "@/lib/supabaseClient";
 import { ModeToggle } from "@/components/mode-toggle";
 import {
   DropdownMenu,
@@ -26,20 +26,24 @@ export default function Navbar() {
   // it will NOT change where Dashboard goes until user clicks Dashboard.
   useEffect(() => {
     let mounted = true;
-    async function fetchMe() {
+    async function load() {
       try {
-        const res = await fetch("/api/users/me");
+        const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
         if (!mounted) return;
-        if (!res.ok) {
+        if (!user) {
           setRole(null);
           setUserEmail(null);
         } else {
-          const j = await res.json();
-          const r = j.user?.role ?? null;
-          const e = j.user?.email ?? null;
-          setRole(r);
-          setUserEmail(e);
-        }
+        // fetch profile row
+        const { data: profile } = await supabase
+          .from("users")
+          .select("role, email")
+          .eq("id", user.id)
+          .single();
+        setRole(profile?.role ?? null);
+        setUserEmail(profile?.email ?? user.email);
+      }
       } catch (err) {
         setRole(null);
         setUserEmail(null);
@@ -47,31 +51,38 @@ export default function Navbar() {
         if (mounted) setLoaded(true);
       }
     }
-    fetchMe();
-    return () => { mounted = false; };
+    load();
+        // 2) subscribe to auth changes so navbar updates live
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
+      const user = session?.user ?? null;
+      if (!user) {
+        setRole(null);
+        setUserEmail(null);
+      } else {
+        const { data: profile } = await supabase.from("users").select("role, email").eq("id", user.id).single();
+        setRole(profile?.role ?? null);
+        setUserEmail(profile?.email ?? user.email);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
-  // When user clicks Dashboard, check session **right now** and then route:
+   // Dashboard button should use role (if any) to route, as we discussed earlier
   const handleDashboardClick = async () => {
-    try {
-      const res = await fetch("/api/users/me"); // fresh check
-      if (!res.ok) {
-        // not logged in -> go to public dashboard
-        return router.push("/dashboard");
-      }
-      const j = await res.json();
-      const r = j.user?.role ?? null;
-      if (!r) return router.push("/dashboard");
-
-      if (r === "superadmin") return router.push("/superadmin/dashboard");
-      if (r === "admin") return router.push("/admin/dashboard");
-      if (r === "member") return router.push("/member/dashboard");
-      // fallback
-      return router.push("/dashboard");
-    } catch (err) {
-      // network/other error -> fallback to public dashboard
-      return router.push("/dashboard");
-    }
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) return router.push("/dashboard");
+    const { data: profile } = await supabase.from("users").select("role").eq("id", user.id).single();
+    const role = profile?.role;
+    if (role === "superadmin") return router.push("/superadmin/dashboard");
+    if (role === "admin") return router.push("/admin/dashboard");
+    if (role === "member") return router.push("/member/dashboard");
+    return router.push("/dashboard");
   };
 
   const handleLogout = async () => {
@@ -79,6 +90,7 @@ export default function Navbar() {
       await fetch("/api/users/logout", { method: "POST" });
     } catch (err) {
       // ignore errors, just clear UI
+      console.log(err)
     } finally {
       setRole(null);
       setUserEmail(null);

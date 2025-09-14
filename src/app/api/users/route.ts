@@ -1,32 +1,83 @@
-// src/app/api/users/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { connect } from "@/dbConfig/dbConfig";
-import User from "@/models/User";
-import { getDataFromToken } from "@/helpers/detDataFromToken";
-
-connect();
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getDataFromToken } from "@/helpers/getDataFromToken";
 
 export async function GET(req: NextRequest) {
   try {
-    const cur = getDataFromToken(req);
-    if (!cur || !["admin","superadmin"].includes(cur.role)) {
+    const profile = await getDataFromToken(req);
+    if (!profile) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const filter: any = {};
-    if (cur.role === "admin") {
-      filter.gym = cur.gym;
+    // ✅ Only allow admins and superadmins to fetch users
+    if (profile.role !== "admin" && profile.role !== "superadmin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // include profile
-    const users = await User.find(filter)
-      .select("name email role gym profile createdAt")
-      .sort({ createdAt: -1 })
-      .lean();
+    // ✅ If superadmin → fetch all users
+    let userQuery = supabaseAdmin
+      .from("users")
+      .select("id, email, name, role, created_at, gym_id");
 
-    return NextResponse.json({ users });
-  } catch (err:any) {
-    console.error("Error in GET /api/users:", err);
+    if (profile.role === "admin") {
+      userQuery = userQuery.eq("gym_id", profile.gym_id);
+    }
+
+    const { data: users, error: userError } = await userQuery.in("role", [
+      "member",
+      "trainer",
+      "nutritionist",
+    ]);
+
+    if (userError) {
+      return NextResponse.json({ error: userError.message }, { status: 500 });
+    }
+
+    // ✅ Fetch member profiles only if needed
+    const memberIds = users.filter((u) => u.role === "member").map((u) => u.id);
+    let profiles: Record<string, any> = {};
+
+    if (memberIds.length > 0) {
+      const { data: profData, error: profError } = await supabaseAdmin
+        .from("member_profiles")
+        .select("user_id, height_cm, weight_kg, bmi, age")
+        .in("user_id", memberIds);
+
+      if (profError) {
+        return NextResponse.json({ error: profError.message }, { status: 500 });
+      }
+
+      // Map for faster lookup
+      profiles = profData.reduce(
+        (acc, p) => ({ ...acc, [p.user_id]: p }),
+        {} as Record<string, any>
+      );
+    }
+
+    // ✅ Merge users with profiles
+    // ✅ Merge users with profiles
+    const formatted = users.map((u) => {
+  if (u.role === "member") {
+    const p = profiles[u.id];
+    return {
+      ...u,
+      profile: p
+        ? {
+            height_cm: p.height_cm,
+            weight_kg: p.weight_kg,
+            bmi: p.bmi,
+            age: p.age,
+          }
+        : null,
+    };
+  }
+  return { ...u, profile: null };
+});
+
+
+
+    return NextResponse.json({ users: formatted });
+  } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

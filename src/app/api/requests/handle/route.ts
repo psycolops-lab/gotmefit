@@ -1,62 +1,46 @@
+// src/app/api/requests/handle/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { connect } from "@/dbConfig/dbConfig";
-import RequestModel from "@/models/Request";
-import User from "@/models/User";
-import bcrypt from "bcryptjs";
-import { getDataFromToken } from "@/helpers/detDataFromToken";
-
-connect();
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getDataFromToken } from "@/helpers/getDataFromToken";
 
 export async function POST(req: NextRequest) {
   try {
-    const cur = getDataFromToken(req);
-    if (!cur || !["admin", "superadmin"].includes(cur.role))
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const cur = await getDataFromToken(req);
+    if (!cur) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { requestId, action, setPassword } = await req.json();
+    const { requestId, action, setPassword } = await req.json(); // action: 'approve'|'reject'
+    if (!requestId || !["approve","reject"].includes(action)) return NextResponse.json({ error: "Invalid" }, { status: 400 });
 
-    if (!requestId || !["approve", "reject"].includes(action))
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    const { data: reqDoc, error: rErr } = await supabaseAdmin.from("requests").select("*").eq("id", requestId).single();
+    if (rErr || !reqDoc) return NextResponse.json({ error: "Request not found" }, { status: 404 });
 
-    const doc = await RequestModel.findById(requestId);
-    if (!doc) return NextResponse.json({ error: "Request not found" }, { status: 404 });
+    // verify admin privileges for that gym
+    const { data: curProfile } = await supabaseAdmin.from("users").select("role").eq("id", cur.id).single();
+    if (!curProfile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-    if (action === "reject") {
-      doc.status = "rejected";
-      await doc.save();
+    // if approve -> create auth user + insert into users + gym_users
+    if (action === "approve") {
+      if (!setPassword) return NextResponse.json({ error: "Password required to approve" }, { status: 400 });
+
+      const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+        email: reqDoc.email,
+        password: setPassword,
+        email_confirm: true,
+      });
+      if (authErr) return NextResponse.json({ error: authErr.message }, { status: 500 });
+
+      await supabaseAdmin.from("users").insert([{ id: authUser.user.id, email: reqDoc.email, name: reqDoc.name, role: reqDoc.role }]);
+      if (reqDoc.gym_id) {
+        await supabaseAdmin.from("gym_users").insert([{ gym_id: reqDoc.gym_id, user_id: authUser.user.id, role: reqDoc.role }]);
+      }
+
+      await supabaseAdmin.from("requests").update({ status: "approved" }).eq("id", requestId);
+      return NextResponse.json({ message: "Request approved" });
+    } else {
+      await supabaseAdmin.from("requests").update({ status: "rejected" }).eq("id", requestId);
       return NextResponse.json({ message: "Request rejected" });
     }
-
-    // Approve
-    if (cur.role === "admin" && doc.gym && String(doc.gym) !== String(cur.gym))
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-    let hashed = doc.hashedPassword;
-    if (!hashed) {
-      if (!setPassword) return NextResponse.json({ error: "Password required to approve" }, { status: 400 });
-      hashed = await bcrypt.hash(setPassword, 10);
-    }
-
-    const finalGym = doc.gym || cur.gym;
-
-    const user = await User.create({
-      username: doc.name || doc.fullName || doc.email.split("@")[0],
-      email: doc.email,
-      password: hashed,
-      role: doc.role,
-      gym: finalGym,
-      createdBy: cur.id,
-      status: "approved",
-    });
-
-    doc.status = "approved";
-    await doc.save();
-
-    const safe = user.toObject();
-    delete safe.password;
-
-    return NextResponse.json({ message: "User approved", user: safe });
-  } catch (err: any) {
+  } catch (err:any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

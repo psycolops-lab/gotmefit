@@ -1,7 +1,9 @@
+// src/app/admin/dashboard/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabaseClient"; // Import Supabase client
 import {
   Card,
   CardHeader,
@@ -12,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useRouter } from "next/navigation"; // Add useRouter for session checks
 
 export default function AdminDashboard() {
   const [members, setMembers] = useState<any[]>([]);
@@ -19,25 +22,67 @@ export default function AdminDashboard() {
   const [nutritionists, setNutritionists] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleToCreate, setRoleToCreate] = useState<string | null>(null);
+  
+  const router = useRouter();
 
   useEffect(() => {
-    async function fetchUsers() {
-      try {
-        const res = await fetch("/api/users");
-        if (!res.ok) throw new Error("Failed to fetch users");
-        const data = await res.json();
-        const all = data.users || [];
-        setMembers(all.filter((u: any) => u.role === "member"));
-        setTrainers(all.filter((u: any) => u.role === "trainer"));
-        setNutritionists(all.filter((u: any) => u.role === "nutritionist"));
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+    // src/app/admin/dashboard/page.tsx (only update fetchUsers, keep UI unchanged)
+async function fetchUsers() {
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session?.access_token) {
+      console.error("fetchUsers: Session error:", {
+        message: sessionError?.message,
+        code: sessionError?.code,
+        session: session ? { userId: session.user?.id, email: session.user?.email } : null,
+      });
+      alert("Session expired. Please log in again.");
+      router.push("/login");
+      return;
     }
+
+    console.log("fetchUsers: Session retrieved:", {
+      userId: session.user.id,
+      email: session.user.email,
+      token: session.access_token.slice(0, 10) + "...",
+    });
+
+    const res = await fetch("/api/users", {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    if (!res.ok) {
+      const errorData = await res.json();
+      console.error("fetchUsers: API error:", { status: res.status, error: errorData });
+      throw new Error(`Failed to fetch users: ${errorData.error || res.statusText}`);
+    }
+    const data = await res.json();
+    console.log("fetchUsers: Received data:", {
+      userCount: data.users?.length,
+      users: data.users?.map((u: any) => ({ id: u.id, email: u.email, role: u.role })),
+    });
+    const all = data.users || [];
+    const members = all.filter((u: any) => u.role === "member");
+    const trainers = all.filter((u: any) => u.role === "trainer");
+    const nutritionists = all.filter((u: any) => u.role === "nutritionist");
+    console.log("fetchUsers: Filtered users:", {
+      members: members.length,
+      trainers: trainers.length,
+      nutritionists: nutritionists.length,
+    });
+    setMembers(members);
+    setTrainers(trainers);
+    setNutritionists(nutritionists);
+  } catch (err: any) {
+    console.error("Fetch users error:", err.message);
+    alert("Failed to load users. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+}
     fetchUsers();
-  }, []);
+  }, [router]);
 
   return (
     <div className="min-h-screen p-6 space-y-10">
@@ -164,18 +209,19 @@ function UserTable({ users, role }: { users: any[]; role: string }) {
         </thead>
         <tbody>
           {users.map((u) => (
-            <tr key={u._id} className="border-t hover:bg-gray-50 dark:hover:bg-gray-700">
-              <td className="p-3 font-medium">{u.name || u.username ||  "—"}</td>
+            <tr key={u.id} className="border-t hover:bg-gray-50 dark:hover:bg-gray-700">
+              <td className="p-3 font-medium">{u.name || u.username || u.userName || "—"}</td>
               <td className="p-3">{u.email}</td>
               {role === "member" && (
                 <>
-                  <td className="p-3">{u.profile?.heightCm ?? "—"}</td>
-                  <td className="p-3">{u.profile?.weightKg ?? "—"}</td>
+                  <td className="p-3">{u.profile?.height_cm ?? "—"}</td>
+                  <td className="p-3">{u.profile?.weight_kg ?? "—"}</td>
                   <td className="p-3">{u.profile?.bmi ?? "—"}</td>
                   <td className="p-3">{u.profile?.age ?? "—"}</td>
                 </>
               )}
-              <td className="p-3">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : "—"}</td>
+
+              <td className="p-3">{u.created_at ? new Date(u.created_at).toLocaleDateString() : "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -185,23 +231,45 @@ function UserTable({ users, role }: { users: any[]; role: string }) {
 }
 
 /* ------------------- Create User Form ------------------- */
+// src/app/admin/dashboard/page.tsx (CreateUserForm, no changes needed)
 function CreateUserForm({ role }: { role: string }) {
+  const [loading, setLoading] = useState(false);
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setLoading(true);
     const formData = new FormData(e.currentTarget as HTMLFormElement);
     const body = Object.fromEntries(formData.entries());
 
-    const res = await fetch("/api/users/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...body, role }),
-    });
+    try {
+      // Get Supabase session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        console.error("CreateUserForm: Session error:", sessionError?.message || "No session");
+        alert("Session expired. Please log in again.");
+        window.location.href = "/login";
+        return;
+      }
 
-    if (res.ok) {
-      alert(`${role} created successfully!`);
-      location.reload();
-    } else {
-      alert("Failed to create user");
+      const res = await fetch("/api/users/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ ...body, role }),
+      });
+      setLoading(false);
+
+      if (res.ok) {
+        alert(`${role} created successfully!`);
+        location.reload();
+      } else {
+        const errorData = await res.json();
+        alert(`Failed to create user: ${errorData.error || "Unknown error"}`);
+      }
+    } catch (err: any) {
+      console.error("CreateUserForm: Error:", err.message);
+      alert(`Failed to create user: ${err.message || "Unexpected error"}`);
     }
   }
 
@@ -223,25 +291,27 @@ function CreateUserForm({ role }: { role: string }) {
       {role === "member" && (
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <Label htmlFor="heightCm">Height (cm)</Label>
-            <Input type="number" name="heightCm" />
+            <Label htmlFor="height_cm">Height (cm)</Label>
+            <Input type="number" name="height_cm" />
           </div>
           <div>
-            <Label htmlFor="weightKg">Weight (kg)</Label>
-            <Input type="number" name="weightKg" />
+            <Label htmlFor="weight_kg">Weight (kg)</Label>
+            <Input type="number" name="weight_kg" />
           </div>
           <div>
-            <Label htmlFor="weightKg">BMI</Label>
-            <Input type="number" name="weightKg" />
+            <Label htmlFor="bmi">BMI</Label>
+            <Input type="number" name="bmi" />
           </div>
           <div>
-            <Label htmlFor="date">Date of Birth</Label>
-            <Input type="date"  />
+            <Label htmlFor="dob">Date of Birth</Label>
+            <Input type="date" name="dob" />
           </div>
         </div>
       )}
 
-      <Button type="submit" className="w-full">Create {role}</Button>
+      <Button type="submit" className="w-full" disabled={loading}>
+        {loading ? `Creating ${role}...` : `Create ${role}`}
+      </Button>
     </form>
   );
 }

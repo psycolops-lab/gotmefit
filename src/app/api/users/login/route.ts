@@ -1,27 +1,17 @@
+// src/app/api/users/login/route.ts
+// (Unused in client-side login, but keeping for reference)
 import { NextRequest, NextResponse } from "next/server";
-import { connect } from "@/dbConfig/dbConfig";
-import User from "@/models/User";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
-
-connect();
+import { supabase } from "@/lib/supabaseClient";
 
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
-    const user = await User.findOne({ email });
-    if (!user) return NextResponse.json({ error: "Invalid credentials" }, { status: 400 });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return NextResponse.json({ error: error.message }, { status: 401 });
 
-    const ok = await bcrypt.compare(password, user.password);
-    if (!ok) return NextResponse.json({ error: "Invalid credentials" }, { status: 400 });
-
-    const token = jwt.sign({ id: user._id, role: user.role, gym: user.gym }, process.env.TOKEN_SECRET || "dev-secret", { expiresIn: "7d" });
-
-    const res = NextResponse.json({ message: "Logged in", user: { id: user._id, role: user.role, gym: user.gym }});
-    res.cookies.set("token", token, { httpOnly: true, path: "/" });
-    return res;
+    // data.user and data.session present
+    return NextResponse.json({ user: data.user, session: data.session });
   } catch (err: any) {
-    console.error("Error in /users/login:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Login error" }, { status: 500 });
   }
 }

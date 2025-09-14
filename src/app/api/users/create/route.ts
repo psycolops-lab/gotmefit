@@ -1,67 +1,100 @@
 // src/app/api/users/create/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { connect } from "@/dbConfig/dbConfig";
-import User from "@/models/User";
-import Gym from "@/models/Gym";
-import bcrypt from "bcryptjs";
-import { getDataFromToken } from "@/helpers/detDataFromToken";
-
-connect();
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getDataFromToken } from "@/helpers/getDataFromToken";
 
 export async function POST(req: NextRequest) {
   try {
-    const cur = getDataFromToken(req);
-    if (!cur || !["admin","superadmin"].includes(cur.role)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const cur = await getDataFromToken(req);
+    if (!cur) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (cur.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
-    const { email, password, username, name, role, gymId, profile } = body;
+    const { name, email, password, role, height_cm, weight_kg, bmi, dob } = body;
 
-    if (!email || !password || !role || !gymId) {
-      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
+    if (!email || !password || !role) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    if (cur.role === "admin" && String(cur.gym) !== String(gymId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!["member", "trainer", "nutritionist"].includes(role)) {
+      return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
 
-    const gym = await Gym.findById(gymId);
-    if (!gym) return NextResponse.json({ error: "Gym not found" }, { status: 404 });
-
-    const exists = await User.findOne({ email });
-    if (exists) return NextResponse.json({ error: "Email exists" }, { status: 409 });
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    // username fallback
-    let finalUsername = username;
-    if (!finalUsername) {
-      finalUsername = email.split("@")[0];
-      // try to avoid collision
-      let tries = 0;
-      while (await User.findOne({ username: finalUsername }) && tries < 5) {
-        finalUsername = `${email.split("@")[0]}${Math.floor(Math.random() * 1000)}`;
-        tries++;
-      }
-    }
-
-    const newUser = await User.create({
+    // Create user in Supabase Auth
+    const { data: authUserData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password: hashed,
-      username: finalUsername,
-      name: name || finalUsername,
-      role,
-      gym: gym._id,
-      profile: profile || {},
-      createdBy: cur.id,
+      password,
+      email_confirm: true,
+      user_metadata: { name: name || null },
     });
 
-    const safe = newUser.toObject();
-    delete safe.password;
-    return NextResponse.json({ message: "User created", user: safe });
-  } catch (err:any) {
-    console.error("Error in /api/users/create:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    if (authError) {
+      console.error("Create auth user error:", authError);
+      return NextResponse.json({ error: authError.message }, { status: 500 });
+    }
+
+    const newUserId = authUserData.user.id;
+
+    // Insert user in users table
+    const { error: userError } = await supabaseAdmin
+      .from("users")
+      .insert({
+        id: newUserId,
+        email,
+        name: name || null,
+        role,
+        gym_id: cur.gym_id,
+        created_at: new Date().toISOString(),
+      });
+
+    if (userError) {
+      console.error("Insert user error:", userError);
+      return NextResponse.json({ error: userError.message }, { status: 500 });
+    }
+
+    // Insert member profile if role is member
+   if (role === "member") {
+  const { error: profileError } = await supabaseAdmin
+    .from("member_profiles")
+    .insert({
+      user_id: newUserId,
+      height_cm: height_cm ? parseFloat(height_cm) : null,
+      weight_kg: weight_kg ? parseFloat(weight_kg) : null,
+      bmi: bmi ? parseFloat(bmi) : null,
+      age: dob ? calculateAge(dob) : null,   // ✅ this now gives 18, 19, 20 etc
+    });
+
+
+  if (profileError) {
+    console.error("Insert member profile error:", profileError);
+    return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 }
+
+
+    return NextResponse.json({ message: `${role} created successfully` });
+  } catch (err: any) {
+    console.error("POST /api/users/create error:", err);
+    return NextResponse.json({ error: err.message || "Server error" }, { status: 500 });
+  }
+}
+
+function calculateAge(dob: string): number | null {
+  if (!dob) return null;
+  const birthDate = new Date(dob);
+  if (isNaN(birthDate.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+
+  if (
+    today.getMonth() < birthDate.getMonth() ||
+    (today.getMonth() === birthDate.getMonth() &&
+      today.getDate() < birthDate.getDate())
+  ) {
+    age--;
+  }
+
+  return age;
+}
+
