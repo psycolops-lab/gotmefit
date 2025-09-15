@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     if (cur.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const body = await req.json();
-    const { name, email, password, role, height_cm, weight_kg, bmi, dob } = body;
+    const { name, email, password, role, height_cm, weight_kg, bmi, dob, plan } = body;
 
     if (!email || !password || !role) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
       height_cm: height_cm ? parseFloat(height_cm) : null,
       weight_kg: weight_kg ? parseFloat(weight_kg) : null,
       bmi: bmi ? parseFloat(bmi) : null,
-      age: dob ? calculateAge(dob) : null,   // ✅ this now gives 18, 19, 20 etc
+      plan: plan || null,
+      dob: dob || null,  // ✅ this now gives 18, 19, 20 etc
     });
 
 
@@ -79,22 +80,5 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function calculateAge(dob: string): number | null {
-  if (!dob) return null;
-  const birthDate = new Date(dob);
-  if (isNaN(birthDate.getTime())) return null;
 
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-
-  if (
-    today.getMonth() < birthDate.getMonth() ||
-    (today.getMonth() === birthDate.getMonth() &&
-      today.getDate() < birthDate.getDate())
-  ) {
-    age--;
-  }
-
-  return age;
-}
 

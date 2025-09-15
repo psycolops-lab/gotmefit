@@ -32,15 +32,13 @@ export async function GET(req: NextRequest) {
     if (userError) {
       return NextResponse.json({ error: userError.message }, { status: 500 });
     }
-
-    // ✅ Fetch member profiles only if needed
     const memberIds = users.filter((u) => u.role === "member").map((u) => u.id);
     let profiles: Record<string, any> = {};
 
     if (memberIds.length > 0) {
       const { data: profData, error: profError } = await supabaseAdmin
         .from("member_profiles")
-        .select("user_id, height_cm, weight_kg, bmi, age")
+        .select("user_id, height_cm, weight_kg, bmi, dob, plan")
         .in("user_id", memberIds);
 
       if (profError) {
@@ -53,9 +51,30 @@ export async function GET(req: NextRequest) {
         {} as Record<string, any>
       );
     }
+    function calculateAge(dob: string): number | null {
+  if (!dob) return null;
+  const birthDate = new Date(dob);
+  if (isNaN(birthDate.getTime())) {
+    console.error("Invalid date of birth:", dob);
+    return null;
+  }
 
-    // ✅ Merge users with profiles
-    // ✅ Merge users with profiles
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+
+  if (age < 0 || age > 120) {
+    console.error("Calculated age out of reasonable range:", age, "for dob:", dob);
+    return null;
+  }
+
+  return age;
+}
+
+// ✅ Merge users with profiles
     const formatted = users.map((u) => {
   if (u.role === "member") {
     const p = profiles[u.id];
@@ -66,7 +85,8 @@ export async function GET(req: NextRequest) {
             height_cm: p.height_cm,
             weight_kg: p.weight_kg,
             bmi: p.bmi,
-            age: p.age,
+            age: p.dob ? calculateAge(p.dob) : null,
+            plan: p.plan, 
           }
         : null,
     };
