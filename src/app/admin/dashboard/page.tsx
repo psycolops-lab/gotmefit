@@ -198,16 +198,16 @@ export default function AdminDashboard() {
                     members.slice(0, visibleMembersCount).map((member, index) => (
                       <div
                         key={member.id}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        className="flex items-center justify-between p-4 dark:bg-gray-300 dark:hover:bg-gray-400 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                         style={{ animationDelay: `${index * 0.1}s` }}
                       >
-                        <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-4 ">
                           <Avatar className="h-12 w-12">
                             <AvatarImage src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
                             <AvatarFallback>{member.name?.substring(0, 2) || 'M'}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <h3 className="font-semibold">{member.name || "—"}</h3>
+                            <h3 className="font-semibold text-black">{member.name || "—"}</h3>
                             <div className="flex items-center space-x-4 text-sm text-gray-600">
                               <div className="flex items-center space-x-1">
                                 <Mail className="h-3 w-3" />
@@ -220,9 +220,9 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-6">
-                          <div className="text-center">
-                            <p className="text-sm font-medium">{member.profile?.height_cm|| "—"} cm</p>
+                        <div className="flex items-center space-x-6 text-black">
+                          <div className="text-center ">
+                            <p className="text-sm font-medium ">{member.profile?.height_cm|| "—"} cm</p>
                             <p className="text-xs text-gray-600">Height</p>
                           </div>
                           <div className="text-center">
@@ -293,26 +293,26 @@ export default function AdminDashboard() {
                         className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                         style={{ animationDelay: `${index * 0.1}s` }}
                       >
-                        <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-4 ">
                           <Avatar className="h-12 w-12">
                             <AvatarImage src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
                             <AvatarFallback>{trainer.name?.substring(0, 2) || 'T'}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <h3 className="font-semibold">{trainer.name || "—"}</h3>
+                            <h3 className="font-semibold text-black">{trainer.name || "—"}</h3>
                             <div className="flex items-center space-x-4 text-sm text-gray-600">
                               <div className="flex items-center space-x-1">
                                 <Mail className="h-3 w-3" />
                                 <span>{trainer.email}</span>
                               </div>
-                              <div className="flex items-center space-x-1">
+                              {/* <div className="flex items-center space-x-1">
                                 <Phone className="h-3 w-3" />
                                 <span>{trainer.phone || "—"}</span>
-                              </div>
+                              </div> */}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-6">
+                        <div className="flex items-center space-x-6 text-black">
                           <div className="text-center">
                             <div className="flex items-center space-x-1 text-sm">
                               <Users className="h-3 w-3" />
@@ -387,20 +387,20 @@ export default function AdminDashboard() {
                             <AvatarFallback>{nutritionist.name?.substring(0, 2) || 'N'}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <h3 className="font-semibold">{nutritionist.name || "—"}</h3>
+                            <h3 className="font-semibold text-black">{nutritionist.name || "—"}</h3>
                             <div className="flex items-center space-x-4 text-sm text-gray-600">
                               <div className="flex items-center space-x-1">
                                 <Mail className="h-3 w-3" />
                                 <span>{nutritionist.email}</span>
                               </div>
-                              <div className="flex items-center space-x-1">
+                              {/* <div className="flex items-center space-x-1">
                                 <Phone className="h-3 w-3" />
                                 <span>{nutritionist.phone || "—"}</span>
-                              </div>
+                              </div> */}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-6">
+                        <div className="flex items-center space-x-6 text-black">
                           <div className="text-center">
                             <div className="flex items-center space-x-1 text-sm">
                               <Users className="h-3 w-3" />
