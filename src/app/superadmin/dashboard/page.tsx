@@ -197,9 +197,7 @@ export default function SuperadminDashboard() {
         </div>
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700">
-              <Plus size={16} /> Create Gym
-            </Button>
+            
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -316,7 +314,7 @@ export default function SuperadminDashboard() {
       )}
 
       {/* Stats (small) */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card className="animate-scale-in border-blue-200 dark:border-blue-800">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Gyms</CardTitle>
@@ -351,7 +349,7 @@ export default function SuperadminDashboard() {
           {/* Revenue sample card */}
           {/* No idea of implementation yet so it is static for now */}
         </Card>
-        <Card className="animate-scale-in border-blue-200 dark:border-blue-800" style={{ animationDelay: '0.3s' }}>
+        {/* <Card className="animate-scale-in border-blue-200 dark:border-blue-800" style={{ animationDelay: '0.3s' }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
@@ -360,7 +358,7 @@ export default function SuperadminDashboard() {
             <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">$16,630,00</div>
             <p className="text-xs text-muted-foreground">+8% from last month</p>
           </CardContent>
-        </Card>
+        </Card> */}
       </div>
 
       {/* Header */}
@@ -411,10 +409,10 @@ export default function SuperadminDashboard() {
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center border-t pt-2 text-sm">
+                  {/* <div className="flex justify-between items-center border-t pt-2 text-sm">
                     <div>Revenue</div>
                     <div className="font-semibold text-green-600">₹{(g.revenue || 0).toLocaleString()}</div>
-                  </div>
+                  </div> */}
                 </CardContent>
               </Card>
             );

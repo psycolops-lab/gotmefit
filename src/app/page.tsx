@@ -1,24 +1,44 @@
+// app/page.tsx
 'use client';
-import Footer from '@/components/layout/Footer';
-import Navbar from '@/components/layout/Navbar';
-import AboutSection from '@/components/sections/AboutSection';
-import CTASection from '@/components/sections/CTASection';
-import HeroSection from '@/components/sections/HeroSection';
-import MembershipSection from '@/components/sections/MembershipSection';
-import StepSuccessSection from '@/components/sections/StepSuccessSection';
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function Home() {
+  const router = useRouter();
 
-  return (
-    <main className="min-h-screen">
-      <Navbar  />
-      <HeroSection  />
-      <AboutSection/>
-      <MembershipSection/>
-      <StepSuccessSection/>
-      <CTASection/>
-      <Footer/>
-    </main>
-  );
+  useEffect(() => {
+    const checkSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        // ✅ If logged in → get role and send to correct dashboard
+        const { data: profile } = await supabase
+          .from("users")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+
+        const role = profile?.role;
+
+        if (role === "superadmin") return router.replace("/superadmin/dashboard");
+        if (role === "admin") return router.replace("/admin/dashboard");
+        if (role === "trainer") return router.replace("/trainer/dashboard");
+        if (role === "nutritionist") return router.replace("/nutritionist/dashboard");
+        if (role === "member") return router.replace("/member/dashboard");
+
+        return router.replace("/dashboard"); // fallback
+      } else {
+        // ❌ Not logged in → redirect to /login
+        router.replace("/login");
+      }
+    };
+
+    checkSession();
+  }, [router]);
+
+  return null; // nothing rendered because we always redirect
 }
