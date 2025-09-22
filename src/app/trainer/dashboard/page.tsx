@@ -1,0 +1,754 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { 
+  Loader2, 
+  User, 
+  Scale, 
+  AlertCircle, 
+  Ruler,
+  TrendingUp,
+  TrendingDown
+} from "lucide-react";
+import { formatDistanceToNowStrict } from "date-fns";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from "recharts";
+
+// Types
+type Member = {
+  id: string;
+  user_id: string;
+  name: string;
+  email?: string;
+  weight_kg?: number | null;
+  bmi?: number | null;
+  gender?: string | null;
+  goal?: string | null;
+  height_cm?: number | null;
+  updated_at?: string | null;
+  created_at: string;
+  latest_weight?: number | null;
+  latest_bmi?: number | null;
+  latest_updated?: string | null;
+};
+
+type WeightHistory = {
+  id: string;
+  member_id: string;
+  weight_kg: number;
+  bmi?: number | null;
+  recorded_at: string;
+  created_at: string;
+};
+
+type WeightChartData = {
+  date: string;
+  weight: number;
+  bmi?: number;
+};
+
+export default function TrainerDashboardPage() {
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [showWeightModal, setShowWeightModal] = useState(false);
+  const [showChartModal, setShowChartModal] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [newWeight, setNewWeight] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
+  const [chartData, setChartData] = useState<WeightChartData[]>([]);
+
+useEffect(() => {
+    loadMembers();
+  }, []);
+
+  async function loadMembers() {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) {
+        setError("Not authenticated");
+        setLoading(false);
+        return;
+      }
+
+      const trainerId = session.user.id;
+      console.log("🔍 Trainer ID:", trainerId);
+
+      // Step 1: DEBUG - Check all member_profiles to see what's assigned
+      const { data: allProfiles, error: allError } = await supabase
+        .from("member_profiles")
+        .select("id, user_id, assigned_trainer_id, created_at")
+        .limit(10);
+
+      console.log("🔍 All member_profiles in system:", allProfiles);
+      console.log("🔍 Member profiles with trainer assignments:", 
+        allProfiles?.filter(p => p.assigned_trainer_id !== null)
+      );
+
+      // Step 2: Fetch assigned members from member_profiles
+      const { data: memberProfiles, error: mpError } = await supabase
+        .from("member_profiles")
+        .select(`
+          id,
+          user_id,
+          weight_kg,
+          bmi,
+          gender,
+          goal,
+          height_cm,
+          updated_at,
+          created_at,
+          assigned_trainer_id
+        `)
+        .eq("assigned_trainer_id", trainerId)
+        .order("created_at", { ascending: true });
+
+      console.log("📊 Member profiles query result:", memberProfiles);
+      console.log("🔍 Query used - assigned_trainer_id =", trainerId);
+
+      if (mpError) {
+        console.error("❌ Member profiles error:", mpError);
+        setError(`Failed to load members: ${mpError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      if (!memberProfiles || memberProfiles.length === 0) {
+        console.log("⚠️ No members found for trainer:", trainerId);
+        console.log("🔍 Checking if trainer has any assignments in the system...");
+        
+        // DEBUG: Check if trainer appears in any assignments
+        const { data: trainerAssignments } = await supabase
+          .from("member_profiles")
+          .select("user_id, assigned_trainer_id")
+          .eq("assigned_trainer_id", trainerId);
+
+        console.log("🔍 Trainer assignments found:", trainerAssignments);
+        
+        setMembers([]);
+        setLoading(false);
+        return;
+      }
+
+      console.log("✅ Found", memberProfiles.length, "members assigned to trainer");
+
+      // Step 3: Extract member user_ids
+      const memberIds = memberProfiles.map(m => m.user_id);
+      console.log("📝 Member IDs to fetch:", memberIds);
+
+      // Step 4: Fetch member details (name, email) from users table
+      const { data: userDetails, error: userError } = await supabase
+        .from("users")
+        .select("id, name, email")
+        .in("id", memberIds);
+
+      console.log("👥 User details found:", userDetails?.length || 0);
+
+      if (userError) {
+        console.error("❌ User details error:", userError);
+        setError(`Failed to load member details: ${userError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      // Step 5: Fetch latest weight history for each member
+      let latestWeights: WeightHistory[] = [];
+      const { data: allWeightHistory, error: whError } = await supabase
+        .from("weight_history")
+        .select("id, member_id, weight_kg, bmi, recorded_at, created_at")
+        .in("member_id", memberIds)
+        .order("recorded_at", { ascending: false });
+
+      console.log("📈 Weight history found:", allWeightHistory?.length || 0);
+
+      if (whError) {
+        console.error("❌ Weight history error:", whError);
+        // Don't fail completely, just log and continue
+      } else {
+        // Get the latest weight for each member (one per member)
+        const weightMap = new Map<string, WeightHistory>();
+        allWeightHistory?.forEach(wh => {
+          if (!weightMap.has(wh.member_id)) {
+            weightMap.set(wh.member_id, wh);
+          }
+        });
+        
+        latestWeights = Array.from(weightMap.values());
+        console.log("📊 Latest weights per member:", latestWeights.length);
+      }
+
+      // Step 6: Merge all data
+      const mergedMembers: Member[] = memberProfiles.map(member => {
+        // Find user details by matching IDs
+        const userDetail = userDetails?.find(u => u.id === member.user_id);
+        console.log(`🔗 Member ${member.user_id}:`, {
+          userFound: !!userDetail,
+          userName: userDetail?.name,
+          userEmail: userDetail?.email
+        });
+        
+        // Find latest weight
+        const latestWeight = latestWeights.find(wh => wh.member_id === member.user_id);
+        
+        return {
+          id: member.id,
+          user_id: member.user_id,
+          name: userDetail?.name || "Unknown User",
+          email: userDetail?.email,
+          weight_kg: member.weight_kg,
+          bmi: member.bmi,
+          gender: member.gender,
+          goal: member.goal,
+          height_cm: member.height_cm,
+          updated_at: member.updated_at,
+          created_at: member.created_at,
+          latest_weight: latestWeight?.weight_kg ?? member.weight_kg,
+          latest_bmi: latestWeight?.bmi ?? member.bmi,
+          latest_updated: latestWeight?.recorded_at ?? member.updated_at,
+        };
+      });
+
+      console.log("🎉 Final merged members:", mergedMembers);
+      setMembers(mergedMembers);
+    } catch (err: any) {
+      console.error("💥 Error loading members:", err);
+      setError("Failed to load members: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadWeightHistory(memberId: string) {
+    try {
+      setError(null);
+      const { data: history, error } = await supabase
+        .from("weight_history")
+        .select("id, member_id, weight_kg, bmi, recorded_at, created_at")
+        .eq("member_id", memberId)
+        .order("recorded_at", { ascending: true });
+
+      if (error) {
+        console.error("Weight history error:", error);
+        throw error;
+      }
+
+      // Transform for chart - get last 12 months or all if less
+      const chartData: WeightChartData[] = (history || []).map(h => ({
+        date: new Date(h.recorded_at).toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric' 
+        }),
+        weight: h.weight_kg,
+        bmi: h.bmi || undefined,
+      })).slice(-12); // Last 12 entries
+
+      setWeightHistory(history || []);
+      setChartData(chartData);
+    } catch (err: any) {
+      console.error("Error loading weight history:", err);
+      setError("Failed to load weight history: " + err.message);
+    }
+  }
+
+  async function handleUpdateWeight() {
+    if (!selectedMember || !newWeight) {
+      setError("Please enter a weight");
+      return;
+    }
+
+    setUpdating(selectedMember.user_id);
+    setError(null);
+
+    try {
+      const weightNum = parseFloat(newWeight);
+      if (isNaN(weightNum) || weightNum < 30 || weightNum > 200) {
+        setError("Please enter a valid weight between 30-200 kg");
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("Authentication required");
+      }
+
+      const response = await fetch("/api/trainer/update-weight", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          member_user_id: selectedMember.user_id,
+          weight_kg: weightNum,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update weight");
+      }
+
+      // Calculate BMI
+      let bmi: number | null = null;
+      if (selectedMember.height_cm && selectedMember.height_cm > 0) {
+        const h_m = selectedMember.height_cm / 100;
+        bmi = Number((weightNum / (h_m * h_m)).toFixed(2));
+      }
+
+      // Update local state immediately for real-time feedback
+      setMembers(prev => prev.map(member => 
+        member.user_id === selectedMember.user_id
+          ? {
+              ...member,
+              weight_kg: weightNum,
+              bmi,
+              updated_at: new Date().toISOString(),
+              latest_weight: result.weight_kg || weightNum,
+              latest_bmi: result.bmi || bmi,
+              latest_updated: new Date().toISOString(),
+            }
+          : member
+      ));
+
+      // Close modal
+      setShowWeightModal(false);
+      setNewWeight("");
+      setSelectedMember(null);
+      
+      // Success feedback
+      setTimeout(() => {
+        // Don't refresh entire list to maintain real-time feel
+        alert("Weight updated successfully!");
+      }, 100);
+
+    } catch (err: any) {
+      console.error("Error updating weight:", err);
+      setError("Failed to update weight: " + err.message);
+    } finally {
+      setUpdating(null);
+    }
+  }
+
+  const openWeightModal = (member: Member) => {
+    setSelectedMember(member);
+    setNewWeight((member.latest_weight ?? member.weight_kg ?? "").toString());
+    setShowWeightModal(true);
+    setError(null);
+  };
+
+  const openChartModal = async (member: Member) => {
+    setSelectedMember(member);
+    await loadWeightHistory(member.user_id);
+    setShowChartModal(true);
+  };
+
+  const closeModals = () => {
+    setShowWeightModal(false);
+    setShowChartModal(false);
+    setNewWeight("");
+    setSelectedMember(null);
+    setError(null);
+    setWeightHistory([]);
+    setChartData([]);
+  };
+
+  // Weight change calculation
+  const getWeightChange = (member: Member) => {
+    if (!member.latest_weight || !member.weight_kg) return null;
+    const change = member.latest_weight - member.weight_kg;
+    return change > 0 ? `+${change.toFixed(1)}` : change.toFixed(1);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+        >
+          <Loader2 className="h-8 w-8 text-blue-600" />
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-6 p-6 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen mt-16"
+    >
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between"
+      >
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Trainer Dashboard</h1>
+          <p className="text-gray-600">
+            Manage your assigned members ({members.length})
+          </p>
+        </div>
+        <Button onClick={loadMembers} variant="outline">
+          Refresh
+        </Button>
+      </motion.div>
+
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center"
+        >
+          <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
+          <span className="text-red-700">{error}</span>
+        </motion.div>
+      )}
+
+      <AnimatePresence>
+        {members.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center py-12"
+          >
+            <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No members assigned</h3>
+            <p className="text-gray-500">You don`t have any members assigned to you yet.</p>
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <div className="rounded-lg border bg-card overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    <TableHead className="w-[200px]">Member</TableHead>
+                    <TableHead>Latest Weight</TableHead>
+                    <TableHead>BMI</TableHead>
+                    <TableHead>Height</TableHead>
+                    <TableHead>Goal</TableHead>
+                    <TableHead>Last Updated</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {members.map((member) => {
+                    const weightChange = getWeightChange(member);
+                    const changeValue = weightChange ? parseFloat(weightChange) : 0;
+
+                    return (
+                      <TableRow key={member.id} className="border-b hover:bg-gray-50">
+                        <TableCell className="font-medium">
+                          <div>
+                            <div className="font-semibold">{member.name}</div>
+                            {member.email && (
+                              <div className="text-sm text-gray-500">{member.email}</div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                              <Scale className="h-4 w-4 mr-2 text-gray-400" />
+                              <span className="font-semibold">
+                                {member.latest_weight ?? member.weight_kg ?? "—"} kg
+                              </span>
+                            </div>
+                            {weightChange !== null && (
+                              <Badge 
+                                variant="secondary" 
+                                className={`text-xs ${
+                                  changeValue >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                }`}
+                              >
+                                {changeValue >= 0 ? (
+                                  <TrendingUp className="h-3 w-3 mr-1" />
+                                ) : (
+                                  <TrendingDown className="h-3 w-3 mr-1" />
+                                )}
+                                {weightChange} kg
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={member.latest_bmi ? "default" : "secondary"}
+                            className={member.latest_bmi ? "bg-blue-100 text-blue-800" : ""}
+                          >
+                            {member.latest_bmi ?? member.bmi ?? "—"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center">
+                            <Ruler className="h-4 w-4 mr-2 text-gray-400" />
+                            <span className="text-sm">
+                              {member.height_cm ? `${member.height_cm} cm` : "—"}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize max-w-[120px] truncate">
+                            {member.goal ?? "—"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm text-gray-500">
+                            {member.latest_updated ? 
+                              formatDistanceToNowStrict(new Date(member.latest_updated)) + " ago" : 
+                              "Never"
+                            }
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right space-x-2">
+                          {/* Chart Modal */}
+                          <Dialog open={showChartModal && selectedMember?.user_id === member.user_id}>
+                            <DialogTrigger asChild>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => openChartModal(member)}
+                              >
+                                📈 Chart
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-4xl max-h-[80vh] w-full">
+                              <DialogHeader>
+                                <DialogTitle>Weight Progress - {member.name}</DialogTitle>
+                                <DialogDescription>
+                                  Track {member.name}`s weight and BMI progress over time.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                {chartData.length > 0 ? (
+                                  <div className="h-[400px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                      <LineChart data={chartData}>
+                                        <CartesianGrid strokeDasharray="3 3" />
+                                        <XAxis 
+                                          dataKey="date" 
+                                          stroke="#888" 
+                                          fontSize={12}
+                                        />
+                                        <YAxis 
+                                          stroke="#888" 
+                                          fontSize={12}
+                                          domain={['dataMin', 'dataMax']}
+                                        />
+                                        <Tooltip 
+                                          contentStyle={{
+                                            backgroundColor: 'white',
+                                            border: '1px solid #e5e7eb',
+                                            borderRadius: '8px'
+                                          }}
+                                        />
+                                        <Legend />
+                                        <Line 
+                                          type="monotone" 
+                                          dataKey="weight" 
+                                          stroke="#3b82f6" 
+                                          strokeWidth={3}
+                                          name="Weight (kg)"
+                                          dot={{ fill: '#3b82f6', strokeWidth: 2 }}
+                                        />
+                                        {chartData.some(d => d.bmi) && (
+                                          <Line 
+                                            type="monotone" 
+                                            dataKey="bmi" 
+                                            stroke="#10b981" 
+                                            strokeWidth={2}
+                                            strokeDasharray="5 5"
+                                            name="BMI"
+                                            dot={{ fill: '#10b981', strokeWidth: 2 }}
+                                          />
+                                        )}
+                                      </LineChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-8 text-gray-500">
+                                    <Scale className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                                    <p>No weight history data available yet.</p>
+                                    <p className="text-sm text-gray-400 mt-1">
+                                      Start tracking {member.name}`s progress by updating their weight.
+                                    </p>
+                                  </div>
+                                )}
+                                
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div className="p-3 bg-gray-50 rounded-lg">
+                                    <div className="font-medium text-gray-900">Total Records</div>
+                                    <div className="text-2xl font-bold text-blue-600">
+                                      {weightHistory.length}
+                                    </div>
+                                  </div>
+                                  <div className="p-3 bg-gray-50 rounded-lg">
+                                    <div className="font-medium text-gray-900">Current Weight</div>
+                                    <div className="text-2xl font-bold text-green-600">
+                                      {selectedMember?.latest_weight ?? "—"} kg
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="flex justify-end space-x-2 pt-4">
+                                  <Button type="button" variant="outline" onClick={closeModals}>
+                                    Close
+                                  </Button>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+
+                          {/* Weight Update Modal */}
+                          <Dialog open={showWeightModal && selectedMember?.user_id === member.user_id}>
+                            <DialogTrigger asChild>
+                              <Button 
+                                size="sm" 
+                                variant="default"
+                                onClick={() => openWeightModal(member)}
+                                disabled={updating === member.user_id}
+                              >
+                                {updating === member.user_id ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Updating...
+                                  </>
+                                ) : (
+                                  "⚖️ Update"
+                                )}
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Update Weight for {member.name}</DialogTitle>
+                                <DialogDescription>
+                                  Enter the member`s current weight measurement. This will be recorded in their weight history and update their profile.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div>
+                                  <Label htmlFor="weight">Current Weight (kg)</Label>
+                                  <Input
+                                    id="weight"
+                                    type="number"
+                                    step="0.1"
+                                    min="30"
+                                    max="200"
+                                    value={newWeight}
+                                    onChange={(e) => {
+                                      setNewWeight(e.target.value);
+                                      setError(null);
+                                    }}
+                                    placeholder="e.g., 70.5"
+                                    className="mt-1"
+                                  />
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Enter weight between 30-200 kg
+                                  </div>
+                                </div>
+                                
+                                {selectedMember?.height_cm && (
+                                  <div className="p-3 bg-blue-50 rounded-md border">
+                                    <div className="text-sm text-blue-800 mb-1">
+                                      <strong>Height:</strong> {selectedMember.height_cm} cm
+                                    </div>
+                                    {newWeight && (
+                                      <div className="text-sm text-blue-800">
+                                        <strong>Estimated BMI:</strong> 
+                                        {(() => {
+                                          const weightNum = parseFloat(newWeight);
+                                          if (!isNaN(weightNum) && selectedMember.height_cm) {
+                                            const h_m = selectedMember.height_cm / 100;
+                                            const calculatedBmi = Number((weightNum / (h_m * h_m)).toFixed(2));
+                                            return ` ${calculatedBmi}`;
+                                          }
+                                          return " —";
+                                        })()}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {error && (
+                                  <div className="text-red-600 text-sm p-2 bg-red-50 rounded-md border">
+                                    {error}
+                                  </div>
+                                )}
+
+                                <div className="flex justify-end space-x-2 pt-4">
+                                  <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    onClick={closeModals}
+                                    disabled={!!updating}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button 
+                                    onClick={handleUpdateWeight}
+                                    disabled={!newWeight || updating === selectedMember?.user_id}
+                                  >
+                                    {updating === selectedMember?.user_id ? (
+                                      <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        Saving...
+                                      </>
+                                    ) : (
+                                      "Update Weight"
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}

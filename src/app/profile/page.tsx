@@ -2,7 +2,7 @@ import React from 'react'
 
 function page() {
   return (
-    <div> profilepage</div>
+    <div className='mt-20'> profilepage</div>
   )
 }
 

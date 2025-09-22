@@ -32,11 +32,11 @@ export async function middleware(req: NextRequest) {
 
   // Role-based dashboard redirects
   if (pathname === "/" || pathname === "/login") {
-    if (role === "superadmin") return NextResponse.redirect(new URL("/dashboard/superadmin", req.url));
-    if (role === "admin") return NextResponse.redirect(new URL("/dashboard/admin", req.url));
-    if (role === "trainer") return NextResponse.redirect(new URL("/dashboard/trainer", req.url));
-    if (role === "nutritionist") return NextResponse.redirect(new URL("/dashboard/nutritionist", req.url));
-    if (role === "member") return NextResponse.redirect(new URL("/dashboard/member", req.url));
+    if (role === "superadmin") return NextResponse.redirect(new URL("/superadmin/dashboard", req.url));
+    if (role === "admin") return NextResponse.redirect(new URL("/admin/dashboard", req.url));
+    if (role === "trainer") return NextResponse.redirect(new URL("/trainer/dashboard", req.url));
+    if (role === "nutritionist") return NextResponse.redirect(new URL("/nutritionist/dashboard", req.url));
+    if (role === "member") return NextResponse.redirect(new URL("/member/dashboard", req.url));
   }
 
   // Example: block a member from accessing admin dashboard
@@ -51,6 +51,6 @@ export const config = {
   matcher: [
     "/",              // root
     "/login",         // login page
-    "/dashboard/:path*", // all dashboards
+    "/:path*/dashboard", // all dashboards
   ],
 };

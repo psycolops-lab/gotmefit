@@ -71,6 +71,15 @@ export default function Login() {
       } else if (role === "admin") {
         console.log("Redirecting to /admin/dashboard");
         router.push("/admin/dashboard");
+      }else if (role === "member") {
+        console.log("Redirecting to /member/dashboard");
+        router.push("/member/dashboard");
+      }else if (role === "trainer") {
+        console.log("Redirecting to /trainer/dashboard");
+        router.push("/trainer/dashboard");
+      }else if (role === "nutritionist") {
+        console.log("Redirecting to /nutritionist/dashboard");
+        router.push("/nutritionist/dashboard");
       } else {
         console.log("Redirecting to /profile");
         router.push("/profile");
