@@ -15,3 +15,4 @@ export interface MemberProfile {
   bmi: number | null;
   age: number | null;
 }
+

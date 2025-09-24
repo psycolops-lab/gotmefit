@@ -72,8 +72,8 @@ export default function Login() {
         console.log("Redirecting to /admin/dashboard");
         router.push("/admin/dashboard");
       }else if (role === "member") {
-        console.log("Redirecting to /member/dashboard");
-        router.push("/member/dashboard");
+        console.log("Redirecting to /member/" + userId);
+  router.push(`/member/${userId}`);
       }else if (role === "trainer") {
         console.log("Redirecting to /trainer/dashboard");
         router.push("/trainer/dashboard");

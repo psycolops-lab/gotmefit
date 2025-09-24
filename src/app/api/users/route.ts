@@ -66,43 +66,63 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Fetch trainer profiles
-    const trainerIds = users.filter((u) => u.role === "trainer").map((u) => u.id);
-    let trainerProfiles: Record<string, any> = {};
-    if (trainerIds.length > 0) {
-      const { data: trainerData, error: trainerError } = await supabaseAdmin
-        .from("trainers_profile")
-        .select("user_id, name, specialization, experience_years")
-        .in("user_id", trainerIds);
+   // --- after you fetch `users` and `profiles` ---
 
-      if (trainerError) {
-        console.error("Trainer profile error:", trainerError);
-      } else {
-        trainerProfiles = trainerData.reduce(
-          (acc, t) => ({ ...acc, [t.user_id]: t }),
-          {} as Record<string, any>
-        );
-      }
-    }
+// build a lookup for users by id (name/email fallback)
+const usersById = (users || []).reduce((acc, u) => {
+  acc[u.id] = u;
+  return acc;
+}, {} as Record<string, any>);
 
-    // Fetch nutritionist profiles
-    const nutritionistIds = users.filter((u) => u.role === "nutritionist").map((u) => u.id);
-    let nutritionistProfiles: Record<string, any> = {};
-    if (nutritionistIds.length > 0) {
-      const { data: nutritionistData, error: nutritionistError } = await supabaseAdmin
-        .from("nutritionists_profile")
-        .select("user_id, full_name, certification")
-        .in("user_id", nutritionistIds);
+// Fetch trainer profiles and normalize to always include `name`
+const trainerIds = users.filter((u) => u.role === "trainer").map((u) => u.id);
+let trainerProfiles: Record<string, any> = {};
+if (trainerIds.length > 0) {
+  const { data: trainerData, error: trainerError } = await supabaseAdmin
+    .from("trainers_profile")
+    .select("user_id, full_name, specialization, experience_years")
+    .in("user_id", trainerIds);
 
-      if (nutritionistError) {
-        console.error("Nutritionist profile error:", nutritionistError);
-      } else {
-        nutritionistProfiles = nutritionistData.reduce(
-          (acc, n) => ({ ...acc, [n.user_id]: n }),
-          {} as Record<string, any>
-        );
-      }
-    }
+  if (trainerError) {
+    console.error("Trainer profile error:", trainerError);
+  } else {
+    trainerProfiles = trainerData.reduce((acc, t) => {
+      acc[t.user_id] = {
+        user_id: t.user_id,
+        // ensure `name` is present (trainers_profile uses `name`)
+        name: t.full_name ?? usersById[t.user_id]?.name ?? usersById[t.user_id]?.email ?? null,
+        specialization: t.specialization ?? null,
+        experience_years: t.experience_years ?? null,
+      };
+      return acc;
+    }, {} as Record<string, any>);
+  }
+}
+
+// Fetch nutritionist profiles and normalize to `name` (nutritionists_profile uses `full_name`)
+const nutritionistIds = users.filter((u) => u.role === "nutritionist").map((u) => u.id);
+let nutritionistProfiles: Record<string, any> = {};
+if (nutritionistIds.length > 0) {
+  const { data: nutritionistData, error: nutritionistError } = await supabaseAdmin
+    .from("nutritionists_profile")
+    .select("user_id, full_name, certification")
+    .in("user_id", nutritionistIds);
+
+  if (nutritionistError) {
+    console.error("Nutritionist profile error:", nutritionistError);
+  } else {
+    nutritionistProfiles = nutritionistData.reduce((acc, n) => {
+      acc[n.user_id] = {
+        user_id: n.user_id,
+        // normalize `full_name` -> `name`
+        name: n.full_name ?? usersById[n.user_id]?.name ?? usersById[n.user_id]?.email ?? null,
+        certification: n.certification ?? null,
+      };
+      return acc;
+    }, {} as Record<string, any>);
+  }
+}
+
 
     function calculateAge(dob: string): number | null {
       if (!dob) return null;
@@ -126,6 +146,13 @@ export async function GET(req: NextRequest) {
 
       return age;
     }
+    function calculateBMI(height_cm?: number, weight_kg?: number): number | null {
+  if (!height_cm || !weight_kg) return null;
+  const height_m = height_cm / 100;
+  const bmi = weight_kg / (height_m * height_m);
+  return parseFloat(bmi.toFixed(2));
+}
+
 
     // ✅ Merge users with profiles and trainer/nutritionist info
     const formatted = users.map((u) => {
@@ -137,7 +164,7 @@ export async function GET(req: NextRequest) {
             ? {
                 height_cm: p.height_cm,
                 weight_kg: p.weight_kg,
-                bmi: p.bmi,
+                bmi: calculateBMI(p.height_cm, p.weight_kg),
                 age: p.dob ? calculateAge(p.dob) : null,
                 plan: p.plan,
                 gender: p.gender,

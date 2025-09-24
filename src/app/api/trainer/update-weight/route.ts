@@ -1,113 +1,102 @@
+// app/api/trainer/update-weight/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getDataFromToken } from "@/helpers/getDataFromToken";
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { member_user_id, weight_kg } = body;
-
-    // Validate input
-    if (!member_user_id || typeof weight_kg !== 'number') {
-      return NextResponse.json({ 
-        error: "member_user_id and valid weight_kg required" 
-      }, { status: 400 });
+    // Verify trainer authentication
+    const profile = await getDataFromToken(req);
+    if (!profile || profile.role !== "trainer") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (weight_kg < 30 || weight_kg > 200) {
-      return NextResponse.json({ 
-        error: "Weight must be between 30kg and 200kg" 
-      }, { status: 400 });
+    // Parse request body
+    const { member_user_id, weight_kg } = await req.json();
+    if (!member_user_id || !weight_kg) {
+      return NextResponse.json({ error: "member_user_id and weight_kg are required" }, { status: 400 });
     }
 
-    // Get trainer from JWT
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "No auth token provided" }, { status: 401 });
+    const weightNum = parseFloat(weight_kg);
+    if (isNaN(weightNum) || weightNum < 30 || weightNum > 200) {
+      return NextResponse.json({ error: "Invalid weight value (30-200 kg)" }, { status: 400 });
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: uErr } = await supabaseAdmin.auth.getUser(token);
-    if (uErr || !userData?.user) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
-    }
-
-    const trainerId = userData.user.id;
-
-    // Verify trainer is assigned to this member
-    const { data: assignment, error: assignErr } = await supabaseAdmin
+    // Verify member is assigned to this trainer
+    const { data: memberProfile, error: profileError } = await supabaseAdmin
       .from("member_profiles")
-      .select("assigned_trainer_id")
+      .select("height_cm, weight_kg, bmi, assigned_trainer_id")
       .eq("user_id", member_user_id)
       .single();
 
-    if (assignErr || !assignment || assignment.assigned_trainer_id !== trainerId) {
-      return NextResponse.json({ 
-        error: "Not authorized to update this member's weight" 
-      }, { status: 403 });
+    if (profileError || !memberProfile) {
+      console.error("Profile fetch error:", profileError?.message || "No profile found");
+      return NextResponse.json({ error: "Member profile not found" }, { status: 404 });
     }
 
-    // Fetch member's height for BMI calculation
-    const { data: profile, error: pErr } = await supabaseAdmin
-      .from("member_profiles")
-      .select("height_cm")
-      .eq("user_id", member_user_id)
-      .single();
-
-    if (pErr || !profile?.height_cm) {
-      return NextResponse.json({ 
-        error: "Member profile not found or height missing" 
-      }, { status: 400 });
+    if (memberProfile.assigned_trainer_id !== profile.id) {
+      return NextResponse.json({ error: "Member not assigned to you" }, { status: 403 });
     }
 
-    const h_m = Number(profile.height_cm) / 100;
-    const bmi = h_m > 0 ? Number((weight_kg / (h_m * h_m)).toFixed(2)) : null;
+    // Calculate BMI if height is available
+    let bmi: number | null = null;
+    if (memberProfile.height_cm && memberProfile.height_cm > 0) {
+      const h_m = memberProfile.height_cm / 100;
+      bmi = Number((weightNum / (h_m * h_m)).toFixed(2));
+    }
 
-    // Update member_profiles
-    const { error: updateErr } = await supabaseAdmin
+    // Update member profile
+    const { error: updateError } = await supabaseAdmin
       .from("member_profiles")
       .update({
-        weight_kg,
+        weight_kg: weightNum,
         bmi,
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", member_user_id);
 
-    if (updateErr) {
-      console.error("Update member_profiles error:", updateErr);
-      return NextResponse.json({ 
-        error: "Failed to update profile: " + updateErr.message 
+    if (updateError) {
+      console.error("Profile update error:", updateError.message);
+      return NextResponse.json({ error: "Failed to update member profile", details: updateError.message }, { status: 500 });
+    }
+
+    // Insert into weight history
+    const { error: historyError } = await supabaseAdmin
+      .from("weight_history")
+      .insert({
+        member_id: member_user_id,
+        weight_kg: weightNum,
+        bmi,
+        recorded_at: new Date().toISOString(),
+        
+      });
+
+    if (historyError) {
+      console.error("History insert error:", historyError.message);
+      // Rollback profile update to maintain consistency
+      await supabaseAdmin
+        .from("member_profiles")
+        .update({ weight_kg: memberProfile.weight_kg, bmi: memberProfile.bmi })
+        .eq("user_id", member_user_id);
+      return NextResponse.json({
+        success: false,
+        error: "Failed to insert weight history",
+        details: historyError.message,
       }, { status: 500 });
     }
 
-    // Insert into weight_history
-    const { error: histErr } = await supabaseAdmin.from("weight_history").insert({
-      member_id: member_user_id,
-      weight_kg,
+    return NextResponse.json({
+      success: true,
+      weight_kg: weightNum,
       bmi,
-      recorded_at: new Date().toISOString(),
-      updated_by: trainerId, // Track who updated
-    });
-
-    if (histErr) {
-      console.error("Weight history insert error:", histErr);
-      // Don't fail the whole request, but log warning
-      return NextResponse.json({ 
-        success: true, 
-        bmi, 
-        warning: "Profile updated, but history insert failed" 
-      }, { status: 200 });
-    }
-
-    return NextResponse.json({ 
-      success: true, 
-      bmi,
-      weight_kg 
     }, { status: 200 });
 
   } catch (err: any) {
-    console.error("Trainer update-weight route error:", err);
-    return NextResponse.json({ 
-      error: err.message ?? "Server error" 
+    console.error("Trainer update weight error:", err.message, err.stack);
+    return NextResponse.json({
+      success: false,
+      error: err.message || "Server error",
+      details: err.details || "No additional details",
     }, { status: 500 });
   }
 }

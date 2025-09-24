@@ -1,554 +1,1076 @@
+// "use client";
+
+// import React, { useEffect, useMemo, useState } from "react";
+// import { supabase } from "@/lib/supabaseClient";
+// import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+// import { Button } from "@/components/ui/button";
+// import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+// import { Input } from "@/components/ui/input";
+// import { Label } from "@/components/ui/label";
+// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+// import { Slider } from "@/components/ui/slider";
+// import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+// import { Badge } from "@/components/ui/badge";
+// import { Loader2, Scale, Ruler, Target, Activity, User, Apple, BarChart2 } from "lucide-react";
+// import { formatDistanceToNowStrict } from "date-fns";
+// import { motion, AnimatePresence } from "framer-motion";
+// import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+// import { useParams, useRouter } from "next/navigation";
+
+// type MemberProfile = {
+//   user_id: string;
+//   height_cm?: number | null;
+//   weight_kg?: number | null;
+//   bmi?: number | null;
+//   gender?: string | null;
+//   goal?: string | null;
+//   activity_level?: string | null;
+//   plan?: string | null;
+//   plan_start?: string | null;
+//   assigned_trainer_id?: string | null;
+//   assigned_nutritionist_id?: string | null;
+// };
+
+// type WeightHistory = {
+//   id: string;
+//   member_id: string;
+//   weight_kg: number;
+//   bmi?: number | null;
+//   recorded_at: string;
+// };
+
+// type Staff = {
+//   full_name: string;
+// };
+
+// export default function MemberDashboardPage() {
+//   const params = useParams();
+//   const router = useRouter();
+//   const memberId = params.id as string; // Get ID from URL
+
+//   const [profile, setProfile] = useState<MemberProfile | null>(null);
+//   const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
+//   const [trainer, setTrainer] = useState<Staff | null>(null);
+//   const [nutritionist, setNutritionist] = useState<Staff | null>(null);
+//   const [loading, setLoading] = useState(true);
+//   const [showSetupModal, setShowSetupModal] = useState(false);
+//   const [showWeightUpdateModal, setShowWeightUpdateModal] = useState(false);
+//   const [newWeight, setNewWeight] = useState("");
+//   const [currentStep, setCurrentStep] = useState(0);
+//   const [formData, setFormData] = useState({
+//     gender: "",
+//     height_cm: 170,
+//     weight_kg: 70,
+//     goal: "",
+//     activity_level: "",
+//   });
+
+//   const goalOptions = [
+//     "Lose Weight",
+//     "Gain Muscle",
+//     "Build Strength",
+//     "Improve Endurance",
+//     "Increase Flexibility",
+//     "Maintain Weight",
+//     "Tone Body",
+//     "Prepare for Event",
+//     "Rehabilitation",
+//     "General Fitness",
+//     "Weight Management",
+//     "Muscle Definition",
+//   ];
+
+//   const activityOptions = ["Basic", "Intermediate", "Advanced"];
+
+//   const steps = [
+//     {
+//       title: "Tell us about yourself",
+//       content: (
+//         <div className="space-y-4">
+//           <ToggleGroup type="single" value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
+//             <ToggleGroupItem value="male" className="flex-1">
+//               <User className="mr-2" /> Male
+//             </ToggleGroupItem>
+//             <ToggleGroupItem value="female" className="flex-1">
+//               <User className="mr-2" /> Female
+//             </ToggleGroupItem>
+//           </ToggleGroup>
+//         </div>
+//       ),
+//       isValid: () => !!formData.gender,
+//     },
+//     {
+//       title: "What is your height?",
+//       content: (
+//         <div className="space-y-4">
+//           <Slider
+//             min={100}
+//             max={250}
+//             step={1}
+//             value={[formData.height_cm]}
+//             onValueChange={(v) => setFormData({ ...formData, height_cm: v[0] })}
+//           />
+//           <div className="text-center font-semibold">{formData.height_cm} cm</div>
+//         </div>
+//       ),
+//       isValid: () => formData.height_cm > 0,
+//     },
+//     {
+//       title: "What is your weight?",
+//       content: (
+//         <div className="space-y-4">
+//           <Slider
+//             min={30}
+//             max={150}
+//             step={0.1}
+//             value={[formData.weight_kg]}
+//             onValueChange={(v) => setFormData({ ...formData, weight_kg: v[0] })}
+//           />
+//           <div className="text-center font-semibold">{formData.weight_kg.toFixed(1)} kg</div>
+//         </div>
+//       ),
+//       isValid: () => formData.weight_kg > 0,
+//     },
+//     {
+//       title: "What is your goal?",
+//       content: (
+//         <Select value={formData.goal} onValueChange={(v) => setFormData({ ...formData, goal: v })}>
+//           <SelectTrigger>
+//             <SelectValue placeholder="Select goal" />
+//           </SelectTrigger>
+//           <SelectContent>
+//             {goalOptions.map((opt) => (
+//               <SelectItem key={opt} value={opt}>
+//                 {opt}
+//               </SelectItem>
+//             ))}
+//           </SelectContent>
+//         </Select>
+//       ),
+//       isValid: () => !!formData.goal,
+//     },
+//     {
+//       title: "What is your physical activity level?",
+//       content: (
+//         <Select value={formData.activity_level} onValueChange={(v) => setFormData({ ...formData, activity_level: v })}>
+//           <SelectTrigger>
+//             <SelectValue placeholder="Select level" />
+//           </SelectTrigger>
+//           <SelectContent>
+//             {activityOptions.map((opt) => (
+//               <SelectItem key={opt} value={opt}>
+//                 {opt}
+//               </SelectItem>
+//             ))}
+//           </SelectContent>
+//         </Select>
+//       ),
+//       isValid: () => !!formData.activity_level,
+//     },
+//   ];
+
+//   useEffect(() => {
+//     let mounted = true;
+//     async function load() {
+//       setLoading(true);
+//       const { data: { session } } = await supabase.auth.getSession();
+//       const user = session?.user;
+//       if (!user) {
+//         setLoading(false);
+//         return;
+//       }
+
+      
+
+//       const { data: mp } = await supabase
+//         .from("member_profiles")
+//         .select("*")
+//         .eq("user_id", user.id)
+//         .maybeSingle();
+
+//       const { data: wh } = await supabase
+//         .from("weight_history")
+//         .select("*")
+//         .eq("member_id", user.id)
+//         .order("recorded_at", { ascending: true });
+
+//       if (!mounted) return;
+//       setProfile(mp ?? null);
+//       setWeightHistory((wh as WeightHistory[]) ?? []);
+
+//       // Fetch trainer and nutritionist names if assigned
+//       if (mp?.assigned_trainer_id) {
+//   const res = await fetch(`/api/member/trainer?trainer_id=${mp.assigned_trainer_id}`);
+//   const json = await res.json();
+//   if (json.trainer_name) {
+//     setTrainer({ full_name: json.trainer_name });
+//   }
+// }
+//       if (mp?.assigned_nutritionist_id) {
+//   const res = await fetch(`/api/member/nutritionist?nutritionist_id=${mp.assigned_nutritionist_id}`);
+//   const json = await res.json();
+//   if (json.nutritionist_name) {
+//     setNutritionist({ full_name: json.nutritionist_name });
+//   }
+// }
+
+//       // Show modal if any required field is missing
+//       if (!mp?.height_cm || !mp?.weight_kg || !mp?.bmi || !mp?.gender || !mp?.goal || !mp?.activity_level) {
+//         setShowSetupModal(true);
+//       }
+
+//       setLoading(false);
+//     }
+
+//     load();
+//     return () => { mounted = false; };
+//   }, [memberId, router]);
+
+//   const lastWeight = useMemo(() => {
+//     if (weightHistory.length === 0) return null;
+//     return weightHistory[weightHistory.length - 1];
+//   }, [weightHistory]);
+
+//   const weightUpdatedAgo = lastWeight ? formatDistanceToNowStrict(new Date(lastWeight.recorded_at)) : null;
+//   const isStale = !lastWeight || (Date.now() - new Date(lastWeight.recorded_at).getTime()) > 24 * 3600 * 1000;
+
+//   async function refreshData() {
+//     setLoading(true);
+//     const { data: { session } } = await supabase.auth.getSession();
+//     const user = session?.user;
+//     if (!user) {
+//       setLoading(false);
+//       return;
+//     }
+//     const { data: mp } = await supabase.from("member_profiles").select("*").eq("user_id", user.id).maybeSingle();
+//     const { data: wh } = await supabase.from("weight_history").select("*").eq("member_id", user.id).order("recorded_at", { ascending: true });
+//     setProfile(mp ?? null);
+//     setWeightHistory((wh as WeightHistory[]) ?? []);
+
+//     if (mp?.assigned_trainer_id) {
+//       const { data: tr } = await supabase.from("trainers_profile").select("full_name").eq("user_id", mp.assigned_trainer_id).single();
+//       setTrainer(tr);
+//     }
+//     if (mp?.assigned_nutritionist_id) {
+//       const { data: nu } = await supabase.from("nutritionists_profile").select("full_name").eq("user_id", mp.assigned_nutritionist_id).single();
+//       setNutritionist(nu);
+//     }
+
+//     setLoading(false);
+//   }
+
+// // Updated handleSetupSubmit function in app/member/dashboard/page.tsx
+// async function handleSetupSubmit() {
+//   // Validate all required fields
+//   if (!formData.gender || !formData.height_cm || !formData.weight_kg || !formData.goal || !formData.activity_level) {
+//     alert("Please complete all required fields");
+//     return;
+//   }
+
+//   if (formData.height_cm < 100 || formData.height_cm > 250) {
+//     alert("Height must be between 100cm and 250cm");
+//     return;
+//   }
+
+//   if (formData.weight_kg < 30 || formData.weight_kg > 200) {
+//     alert("Weight must be between 30kg and 200kg");
+//     return;
+//   }
+
+//   setLoading(true);
+  
+//   try {
+//     const { data: { session } } = await supabase.auth.getSession();
+//     if (!session?.access_token) {
+//       alert("Authentication required");
+//       setLoading(false);
+//       return;
+//     }
+
+//     const response = await fetch("/api/member/update_profile", {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/json",
+//         Authorization: `Bearer ${session.access_token}`,
+//       },
+//       body: JSON.stringify({
+//         height_cm: Number(formData.height_cm),
+//         weight_kg: Number(formData.weight_kg),
+//         gender: formData.gender,
+//         goal: formData.goal,
+//         activity_level: formData.activity_level,
+//       }),
+//     });
+
+//     const result = await response.json();
+
+//     if (response.ok) {
+//       setShowSetupModal(false);
+//       setCurrentStep(0);
+//       // Reset form data
+//       setFormData({
+//         gender: "",
+//         height_cm: 170,
+//         weight_kg: 70,
+//         goal: "",
+//         activity_level: "",
+//       });
+//       await refreshData();
+//       // Optional: Show success message
+//       alert("Profile updated successfully!");
+//     } else {
+//       console.error("Setup submit error:", result);
+//       alert(`Error: ${result.error || "Failed to update profile"}`);
+//     }
+//   } catch (error) {
+//     console.error("Setup submit error:", error);
+//     alert("An unexpected error occurred. Please try again.");
+//   } finally {
+//     setLoading(false);
+//   }
+// }
+
+//   async function handleWeightUpdate() {
+//     if (!newWeight || isNaN(Number(newWeight))) return;
+
+//     const { data: { session } } = await supabase.auth.getSession();
+//     if (!session?.access_token) return;
+
+//     const response = await fetch("/api/member/update_weight", {
+//       method: "POST",
+//       headers: {
+//         "Content-Type": "application/json",
+//         Authorization: `Bearer ${session.access_token}`,
+//       },
+//       body: JSON.stringify({ weight_kg: Number(newWeight) }),
+//     });
+
+//     if (response.ok) {
+//       setShowWeightUpdateModal(false);
+//       setNewWeight("");
+//       refreshData();
+//     } else {
+//       console.error("Weight update error");
+//     }
+//   }
+
+//   if (loading) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="animate-spin" size={48} /></div>;
+
+//   return (
+//     <motion.div
+//       initial={{ opacity: 0, y: 20 }}
+//       animate={{ opacity: 1, y: 0 }}
+//       transition={{ duration: 0.5 }}
+//       className="space-y-6 p-6 mt-15 min-h-screen"
+//     >
+//       {/* Setup Modal */}
+//       <Dialog open={showSetupModal} onOpenChange={(open) => !open && refreshData()}>
+//         <DialogContent>
+//           <DialogHeader>
+//             <DialogTitle>{steps[currentStep].title}</DialogTitle>
+//           </DialogHeader>
+//           <AnimatePresence mode="wait">
+//             <motion.div
+//               key={currentStep}
+//               initial={{ opacity: 0, x: 50 }}
+//               animate={{ opacity: 1, x: 0 }}
+//               exit={{ opacity: 0, x: -50 }}
+//               transition={{ duration: 0.3 }}
+//             >
+//               {steps[currentStep].content}
+//             </motion.div>
+//           </AnimatePresence>
+//           <div className="flex justify-between mt-6">
+//             {currentStep > 0 && (
+//               <Button variant="outline" onClick={() => setCurrentStep(currentStep - 1)}>
+//                 Back
+//               </Button>
+//             )}
+            
+//             <Button
+//               disabled={!steps[currentStep].isValid() || loading}
+//               onClick={() => {
+//                   if (currentStep < steps.length - 1) {
+//                   setCurrentStep(currentStep + 1);
+//                   } else {
+//                   handleSetupSubmit();
+//                   }
+//               }}
+//               className="mt-2"
+//             >
+//               {loading ? (
+//                   <>
+//                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+//                   {currentStep < steps.length - 1 ? "Loading..." : "Saving..."}
+//                   </>
+//               ) : (
+//                   currentStep < steps.length - 1 ? "Next" : "Submit"
+//               )}
+//             </Button>
+//           </div>
+//         </DialogContent>
+//       </Dialog>
+
+//       {/* Weight Update Modal */}
+//       <Dialog open={showWeightUpdateModal} onOpenChange={setShowWeightUpdateModal}>
+//         <DialogContent>
+//           <DialogHeader>
+//             <DialogTitle>Update Today`s Weight</DialogTitle>
+//           </DialogHeader>
+//           <div className="space-y-4">
+//             <Label htmlFor="new-weight">Enter your current weight (kg)</Label>
+//             <Input
+//               id="new-weight"
+//               type="number"
+//               value={newWeight}
+//               onChange={(e) => setNewWeight(e.target.value)}
+//               step="0.1"
+//             />
+//           </div>
+//           <Button onClick={handleWeightUpdate} disabled={!newWeight || isNaN(Number(newWeight))}>
+//             Submit
+//           </Button>
+//         </DialogContent>
+//       </Dialog>
+
+//       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+//         <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3 }}>
+//           <Card className=" shadow-lg rounded-xl overflow-hidden">
+//             <CardHeader className="bg-gradient-to-r from-blue-200 to-blue-300 ">
+//               <CardTitle className="flex items-center pt-1"><Target className="mr-2" /> Plan</CardTitle>
+//             </CardHeader>
+//             <CardContent className="pt-4">
+//               <div className="text-sm text-muted-foreground">Selected plan</div>
+//               <div className="mt-2 font-semibold text-lg">{profile?.plan ?? "No plan assigned"}</div>
+//               {profile?.plan_start && (
+//                 <Badge variant="secondary" className="mt-2">
+//                   Started: {new Date(profile.plan_start).toLocaleDateString()}
+//                 </Badge>
+//               )}
+//             </CardContent>
+//           </Card>
+//         </motion.div>
+
+//         <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.1 }}>
+//           <Card className=" shadow-lg rounded-xl overflow-hidden">
+//             <CardHeader className="bg-gradient-to-r from-green-200 to-green-300 ">
+//               <CardTitle className="flex items-center pt-1"><Scale className="mr-2" /> Weight</CardTitle>
+//             </CardHeader>
+//             <CardContent className="pt-4">
+//               <div className="text-sm text-muted-foreground">Latest</div>
+//               <div className="mt-2 text-2xl font-bold">{lastWeight ? `${lastWeight.weight_kg} kg` : "No data"}</div>
+//               <div className="text-xs text-muted-foreground mt-1">{weightUpdatedAgo ? `Updated ${weightUpdatedAgo} ago` : "-"}</div>
+//               <div className="mt-3 flex gap-2">
+//                 {isStale && (
+//                   <Button variant="default" onClick={() => setShowWeightUpdateModal(true)}>
+//                     Update Today`s Weight
+//                   </Button>
+//                 )}
+//               </div>
+//             </CardContent>
+//           </Card>
+//         </motion.div>
+
+//         <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }}>
+//           <Card className=" shadow-lg rounded-xl overflow-hidden">
+//             <CardHeader className="bg-gradient-to-r from-purple-200 to-purple-300 ">
+//               <CardTitle className="flex items-center"><Ruler className="mr-2" /> Height & BMI</CardTitle>
+//             </CardHeader>
+//             <CardContent className="pt-4">
+//               <div className="text-sm text-muted-foreground">Height</div>
+//               <div className="mt-2 font-semibold">{profile?.height_cm ? `${profile.height_cm} cm` : "—"}</div>
+//               <div className="text-sm text-muted-foreground mt-3">BMI</div>
+//               <div className="mt-2 font-semibold">{profile?.bmi ?? "—"}</div>
+//               <div className="text-xs text-muted-foreground mt-2 flex items-center">
+//                 <Activity className="mr-1" size={14} /> Level: {profile?.activity_level ?? "—"}
+//               </div>
+//             </CardContent>
+//           </Card>
+//         </motion.div>
+//       </div>
+
+//       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+//         <Card className=" shadow-lg rounded-xl overflow-hidden">
+//           <CardHeader className="bg-gradient-to-r from-orange-200 to-orange-300 ">
+//             <CardTitle className="flex items-center"><BarChart2 className="mr-2" /> Weight Tracking</CardTitle>
+//           </CardHeader>
+//           <CardContent className="pt-4">
+//             <ResponsiveContainer width="100%" height={300}>
+//               <LineChart data={weightHistory.map((d) => ({ date: new Date(d.recorded_at).toLocaleDateString(), weight: d.weight_kg }))}>
+//                 <CartesianGrid strokeDasharray="3 3" />
+//                 <XAxis dataKey="date" />
+//                 <YAxis />
+//                 <Tooltip />
+//                 <Legend />
+//                 <Line type="monotone" dataKey="weight" stroke="#8884d8" activeDot={{ r: 8 }} />
+//               </LineChart>
+//             </ResponsiveContainer>
+//           </CardContent>
+//         </Card>
+//       </motion.div>
+
+//       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+//         <Card className=" shadow-lg rounded-xl overflow-hidden">
+//           <CardHeader className="bg-gradient-to-r from-teal-200 to-teal-300 ">
+//             <CardTitle className="flex items-center pt-2 "><User className="mr-2 " /> Assigned Staff</CardTitle>
+//           </CardHeader>
+//           <CardContent className="pt-4 space-y-2">
+//             <div className="flex items-center">
+//               <Apple className="mr-2 text-teal-600" /> Nutritionist: {nutritionist?.full_name ?? "Not assigned"}
+//             </div>
+//             <div className="flex items-center">
+//               <User className="mr-2 text-teal-600" /> Trainer: {trainer?.full_name ?? "Not assigned"}
+//             </div>
+//           </CardContent>
+//         </Card>
+//       </motion.div>
+//     </motion.div>
+//   );
+//}
+
+
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { useParams } from "next/navigation";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "@/components/ui/card";
-import {
-  User,
-  Mail,
-  Phone,
-  Calendar,
-  Ruler,
-  Scale,
-  Activity,
-  TrendingUp,
-  AlertCircle,
-} from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useRouter } from "next/navigation";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Scale, Ruler, Target, Activity, User, Apple, BarChart2 } from "lucide-react";
+import { formatDistanceToNowStrict } from "date-fns";
+import { motion, AnimatePresence } from "framer-motion";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useParams, useRouter } from "next/navigation";
 
-interface MemberProfile {
-  height_cm?: number;
-  weight_kg?: number;
-  bmi?: number;
-  age?: number;
-  plan?: string;
-  phone?: string;
-  dob?: string;
-  goal?: string;
-  created_at?: string;
-}
+type MemberProfile = {
+  user_id: string;
+  height_cm?: number | null;
+  weight_kg?: number | null;
+  bmi?: number | null;
+  gender?: string | null;
+  goal?: string | null;
+  activity_level?: string | null;
+  plan?: string | null;
+  plan_start?: string | null;
+  assigned_trainer_id?: string | null;
+  assigned_nutritionist_id?: string | null;
+};
 
-interface MemberMetrics {
-  date: string;
-  weight_kg: number;
-  body_fat?: number;
-  muscle_mass?: number;
-  notes?: string;
-}
-
-interface MemberData {
+type WeightHistory = {
   id: string;
-  email: string;
-  name?: string;
-  role: string;
-  profile?: MemberProfile;
-  trainer?: {
-    name: string;
-    email: string;
-  };
-  nutritionist?: {
-    name: string;
-    email: string;
-  };
-  recentMetrics?: MemberMetrics[];
-}
+  member_id: string;
+  weight_kg: number;
+  bmi?: number | null;
+  recorded_at: string;
+};
 
-export default function MemberDashboard() {
-  const params = useParams();
-  const memberId = params.memberId as string;
-  const [member, setMember] = useState<MemberData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [metrics, setMetrics] = useState<MemberMetrics[]>([]);
-  const [showMetrics, setShowMetrics] = useState(false);
-  const [editingProfile, setEditingProfile] = useState(false);
+type Staff = {
+  full_name: string;
+};
+
+export default function MemberDashboardPage() {
+  
   const router = useRouter();
+  const params = useParams();
+const memberId = params.memberID as string;  
+
+  const [profile, setProfile] = useState<MemberProfile | null>(null);
+  const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
+  const [trainer, setTrainer] = useState<Staff | null>(null);
+  const [nutritionist, setNutritionist] = useState<Staff | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [showWeightUpdateModal, setShowWeightUpdateModal] = useState(false);
+  const [newWeight, setNewWeight] = useState("");
+  const [currentStep, setCurrentStep] = useState(0);
+  const [formData, setFormData] = useState({
+    gender: "",
+    height_cm: 170,
+    weight_kg: 70,
+    goal: "",
+    activity_level: "",
+  });
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
+
+  const goalOptions = [
+    "Lose Weight",
+    "Gain Muscle",
+    "Build Strength",
+    "Improve Endurance",
+    "Increase Flexibility",
+    "Maintain Weight",
+    "Tone Body",
+    "Prepare for Event",
+    "Rehabilitation",
+    "General Fitness",
+    "Weight Management",
+    "Muscle Definition",
+  ];
+
+  const activityOptions = ["Basic", "Intermediate", "Advanced"];
+
+  const steps = [
+    {
+      title: "Tell us about yourself",
+      content: (
+        <div className="space-y-4">
+          <ToggleGroup type="single" value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
+            <ToggleGroupItem value="male" className="flex-1">
+              <User className="mr-2" /> Male
+            </ToggleGroupItem>
+            <ToggleGroupItem value="female" className="flex-1">
+              <User className="mr-2" /> Female
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      ),
+      isValid: () => !!formData.gender,
+    },
+    {
+      title: "What is your height?",
+      content: (
+        <div className="space-y-4">
+          <Slider
+            min={100}
+            max={250}
+            step={1}
+            value={[formData.height_cm]}
+            onValueChange={(v) => setFormData({ ...formData, height_cm: v[0] })}
+          />
+          <div className="text-center font-semibold">{formData.height_cm} cm</div>
+        </div>
+      ),
+      isValid: () => formData.height_cm > 0,
+    },
+    {
+      title: "What is your weight?",
+      content: (
+        <div className="space-y-4">
+          <Slider
+            min={30}
+            max={150}
+            step={0.1}
+            value={[formData.weight_kg]}
+            onValueChange={(v) => setFormData({ ...formData, weight_kg: v[0] })}
+          />
+          <div className="text-center font-semibold">{formData.weight_kg.toFixed(1)} kg</div>
+        </div>
+      ),
+      isValid: () => formData.weight_kg > 0,
+    },
+    {
+      title: "What is your goal?",
+      content: (
+        <Select value={formData.goal} onValueChange={(v) => setFormData({ ...formData, goal: v })}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select goal" />
+          </SelectTrigger>
+          <SelectContent>
+            {goalOptions.map((opt) => (
+              <SelectItem key={opt} value={opt}>
+                {opt}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ),
+      isValid: () => !!formData.goal,
+    },
+    {
+      title: "What is your physical activity level?",
+      content: (
+        <Select value={formData.activity_level} onValueChange={(v) => setFormData({ ...formData, activity_level: v })}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select level" />
+          </SelectTrigger>
+          <SelectContent>
+            {activityOptions.map((opt) => (
+              <SelectItem key={opt} value={opt}>
+                {opt}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ),
+      isValid: () => !!formData.activity_level,
+    },
+  ];
 
   useEffect(() => {
-    if (memberId) {
-      fetchMemberData();
+    let mounted = true;
+
+    async function load() {
+      setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const loggedInUserId = session?.user?.id ?? null;
+        setIsOwnProfile(memberId === loggedInUserId);
+
+        // Fetch member profile for memberId from URL
+        const { data: mp, error: mpErr } = await supabase
+          .from("member_profiles")
+          .select("*")
+          .eq("user_id", memberId)
+          .maybeSingle();
+
+        if (mpErr) throw mpErr;
+
+        // Fetch weight history
+        const { data: wh, error: whErr } = await supabase
+          .from("weight_history")
+          .select("*")
+          .eq("member_id", memberId)
+          .order("recorded_at", { ascending: true });
+
+        if (whErr) throw whErr;
+
+        if (!mounted) return;
+
+        setProfile(mp ?? null);
+        setWeightHistory((wh as WeightHistory[]) ?? []);
+
+             if (mp?.assigned_trainer_id) {
+  const res = await fetch(`/api/member/trainer?trainer_id=${mp.assigned_trainer_id}`);
+  const json = await res.json();
+  if (json.trainer_name) {
+    setTrainer({ full_name: json.trainer_name });
+  }
+}
+      if (mp?.assigned_nutritionist_id) {
+  const res = await fetch(`/api/member/nutritionist?nutritionist_id=${mp.assigned_nutritionist_id}`);
+  const json = await res.json();
+  if (json.nutritionist_name) {
+    setNutritionist({ full_name: json.nutritionist_name });
+  }
+}
+
+        // Show setup modal **only if the logged-in user is viewing their own dashboard**
+        const requiredMissing =
+          mp?.height_cm == null ||
+          mp?.weight_kg == null ||
+          mp?.gender == null ||
+          mp?.goal == null ||
+          mp?.activity_level == null;
+
+        if (mounted && requiredMissing && isOwnProfile) {
+          setShowSetupModal(true);
+        }
+      } catch (err) {
+        console.error("Error loading member dashboard:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     }
+
+    load();
+
+    return () => {
+      mounted = false;
+    };
   }, [memberId]);
 
-  async function fetchMemberData() {
+  const lastWeight = useMemo(() => {
+    if (weightHistory.length === 0) return null;
+    return weightHistory[weightHistory.length - 1];
+  }, [weightHistory]);
+
+  const weightUpdatedAgo = lastWeight ? formatDistanceToNowStrict(new Date(lastWeight.recorded_at)) : null;
+  const isStale = !lastWeight || (Date.now() - new Date(lastWeight.recorded_at).getTime()) > 24 * 3600 * 1000;
+
+  async function refreshData() {
+    setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        router.push("/login");
-        return;
+      const { data: mp } = await supabase.from("member_profiles").select("*").eq("user_id", memberId).maybeSingle();
+      const { data: wh } = await supabase.from("weight_history").select("*").eq("member_id", memberId).order("recorded_at", { ascending: true });
+      setProfile(mp ?? null);
+      setWeightHistory((wh as WeightHistory[]) ?? []);
+
+      if (mp?.assigned_trainer_id) {
+        const { data: tr } = await supabase.from("trainers_profile").select("full_name").eq("user_id", mp.assigned_trainer_id).single();
+        setTrainer(tr ? { full_name: tr.full_name } : null);
       }
-
-      // Fetch member details
-      const res = await fetch(`/api/member/${memberId}/profile`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        console.log(data);
-        setMember(data.member);
-
-        // Fetch recent metrics
-        const metricsRes = await fetch(`/api/member/${memberId}/metrics`, {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-
-        if (metricsRes.ok) {
-          const metricsData = await metricsRes.json();
-          setMetrics(metricsData.metrics || []);
-        }
+      if (mp?.assigned_nutritionist_id) {
+        const { data: nu } = await supabase.from("nutritionists_profile").select("full_name").eq("user_id", mp.assigned_nutritionist_id).single();
+        setNutritionist(nu ?? null);
       }
-    } catch (error) {
-      console.error("Error fetching member data:", error);
     } finally {
       setLoading(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen pt-20 px-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Updated handleSetupSubmit function in app/member/dashboard/page.tsx
+  async function handleSetupSubmit() {
+    // Validate all required fields
+    if (!formData.gender || !formData.height_cm || !formData.weight_kg || !formData.goal || !formData.activity_level) {
+      alert("Please complete all required fields");
+      return;
+    }
 
-  if (!member) {
-    return (
-      <div className="min-h-screen pt-20 px-6">
-        <div className="max-w-4xl mx-auto">
-          <Card>
-            <CardContent className="p-8 text-center">
-              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Member Not Found</h2>
-              <p className="text-gray-600">The member you&apos;re looking for doesn&apos;t exist.</p>
-              <Button onClick={() => router.push('/admin/dashboard')} className="mt-4">
-                Back to Dashboard
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+    if (formData.height_cm < 100 || formData.height_cm > 250) {
+      alert("Height must be between 100cm and 250cm");
+      return;
+    }
 
-  const profile = member.profile || {};
-  const latestWeight = metrics[0]?.weight_kg;
-  const weightChange = latestWeight && profile.weight_kg 
-    ? ((latestWeight - profile.weight_kg) * 100 / profile.weight_kg).toFixed(1)
-    : 0;
+    if (formData.weight_kg < 30 || formData.weight_kg > 200) {
+      alert("Weight must be between 30kg and 200kg");
+      return;
+    }
 
-  const bmiCategory = profile.bmi ? 
-    (profile.bmi < 18.5 ? "Underweight" : 
-     profile.bmi < 25 ? "Normal" : 
-     profile.bmi < 30 ? "Overweight" : "Obese") : "Unknown";
-
-  return (
-    <div className="min-h-screen pt-20 px-6">
-      <div className="max-w-6xl mx-auto space-y-8">
-        {/* Header */}
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }} 
-          animate={{ opacity: 1, y: 0 }} 
-          className="flex items-center justify-between"
-        >
-          <div>
-            <div className="flex items-center space-x-4 mb-2">
-              <Avatar className="h-16 w-16">
-                <AvatarFallback>{member.name?.substring(0, 2) || 'M'}</AvatarFallback>
-              </Avatar>
-              <div>
-                <h1 className="text-3xl font-bold">{member.name || "Member"}</h1>
-                <p className="text-gray-600">{member.email}</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Badge variant={member.role === "member" ? "default" : "secondary"} className="bg-blue-600">
-                Member
-              </Badge>
-              {profile.plan && (
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                  {profile.plan} Plan
-                </Badge>
-              )}
-            </div>
-          </div>
-          <div className="flex space-x-2">
-            <Button onClick={() => setEditingProfile(true)} variant="outline">
-              Edit Profile
-            </Button>
-            <Button onClick={() => router.push('/admin/dashboard')}>
-              Back to Dashboard
-            </Button>
-          </div>
-        </motion.div>
-
-        {/* Main Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Current Weight</CardTitle>
-              <Scale className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{profile.weight_kg || "—"}kg</div>
-              {latestWeight && profile.weight_kg && (
-                <p className={`text-sm ${String(weightChange).includes('-') ? 'text-green-600' : 'text-red-600'}`}>
-                  {Number(weightChange) > 0 ? '+' : ''}{weightChange}% this month
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">BMI</CardTitle>
-              <Ruler className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{profile.bmi?.toFixed(1) || "—"}</div>
-              <p className="text-sm text-muted-foreground capitalize">{bmiCategory}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Progress</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {metrics.length > 0 ? `${((metrics.length / 12) * 100).toFixed(0)}%` : "0%"}
-              </div>
-              <p className="text-sm text-muted-foreground">{metrics.length} months tracked</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Profile & Assignments */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Profile Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Profile Information
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-3 text-sm">
-                  <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <span className="font-medium">Email:</span>
-                  <span>{member.email}</span>
-                </div>
-                {profile.phone && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="font-medium">Phone:</span>
-                    <span>{profile.phone}</span>
-                  </div>
-                )}
-                {profile.dob && (
-                  <div className="flex items-center gap-3 text-sm">
-                    <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="font-medium">Date of Birth:</span>
-                    <span>{new Date(profile.dob).toLocaleDateString()}</span>
-                  </div>
-                )}
-                {profile.goal && (
-                  <div className="flex items-start gap-3 text-sm">
-                    <Activity className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-medium">Goal:</span>
-                      <p className="text-sm">{profile.goal}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Professional Assignments */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Professional Team
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h4 className="font-medium mb-2">Trainer</h4>
-                {member.trainer ? (
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <p className="font-semibold">{member.trainer.name}</p>
-                    <p className="text-sm text-blue-700">{member.trainer.email}</p>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-gray-50 rounded-lg text-center">
-                    <p className="text-sm text-gray-500">No trainer assigned</p>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <h4 className="font-medium mb-2">Nutritionist</h4>
-                {member.nutritionist ? (
-                  <div className="p-3 bg-green-50 rounded-lg">
-                    <p className="font-semibold">{member.nutritionist.name}</p>
-                    <p className="text-sm text-green-700">{member.nutritionist.email}</p>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-gray-50 rounded-lg text-center">
-                    <p className="text-sm text-gray-500">No nutritionist assigned</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Progress Metrics */}
-        <Card>
-          <CardHeader className="flex justify-between items-center">
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Progress Tracking
-            </CardTitle>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setShowMetrics(!showMetrics)}
-            >
-              {showMetrics ? "Hide Details" : "Show Details"}
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {/* Progress Overview */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="font-medium mb-2">Weight Progress</h3>
-                  <div className="space-y-2">
-                    {metrics.length > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span>Target: {profile.weight_kg || metrics[0].weight_kg}kg</span>
-                        <span>Current: {latestWeight}kg</span>
-                      </div>
-                    )}
-                    <Progress 
-                      value={metrics.length > 0 ? Math.min(100, ((metrics.length / 12) * 100)) : 0} 
-                      className="h-2"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      {metrics.length} months of tracking • Goal: Maintain healthy weight
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Detailed Metrics - Conditional */}
-              {showMetrics && metrics.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-3">Date</th>
-                        <th className="text-left p-3">Weight (kg)</th>
-                        <th className="text-left p-3">Body Fat %</th>
-                        <th className="text-left p-3">Muscle Mass (kg)</th>
-                        <th className="text-left p-3">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {metrics.slice(0, 6).map((metric, index) => (
-                        <tr key={index} className="border-b last:border-b-0 hover:bg-gray-50">
-                          <td className="p-3 font-medium">
-                            {new Date(metric.date).toLocaleDateString()}
-                          </td>
-                          <td className="p-3">
-                            <span className={`font-medium ${index === 0 ? 'text-blue-600' : ''}`}>
-                              {metric.weight_kg}kg
-                            </span>
-                          </td>
-                          <td className="p-3">{metric.body_fat || "—"}</td>
-                          <td className="p-3">{metric.muscle_mass || "—"}</td>
-                          <td className="p-3 max-w-xs">
-                            <span className="text-gray-500 truncate block" title={metric.notes}>
-                              {metric.notes || "—"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {metrics.length > 6 && (
-                    <div className="text-center mt-4 text-sm text-gray-500">
-                      Showing 6 most recent entries • Total: {metrics.length}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Edit Profile Dialog */}
-      <Dialog open={editingProfile} onOpenChange={setEditingProfile}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit {member.name}&apos; Profile</DialogTitle>
-          </DialogHeader>
-          <EditProfileForm 
-            member={member} 
-            onSuccess={() => {
-              setEditingProfile(false);
-              fetchMemberData();
-            }}
-          />
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-/* ----------------- Edit Profile Form ----------------- */
-function EditProfileForm({ member, onSuccess }: { 
-  member: MemberData; 
-  onSuccess: () => void; 
-}) {
-  const [formData, setFormData] = useState({
-    name: member.name || '',
-    phone: member.profile?.phone || '',
-    dob: member.profile?.dob || '',
-    height_cm: member.profile?.height_cm || '',
-    weight_kg: member.profile?.weight_kg || '',
-    goal: member.profile?.goal || '',
-  });
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
     setLoading(true);
     
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch(`/api/member/${member.id}/profile`, {
-        method: 'PATCH',
+      if (!session?.access_token) {
+        alert("Authentication required");
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch("/api/member/update_profile", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          height_cm: Number(formData.height_cm),
+          weight_kg: Number(formData.weight_kg),
+          gender: formData.gender,
+          goal: formData.goal,
+          activity_level: formData.activity_level,
+        }),
       });
 
+      const result = await response.json();
+
       if (response.ok) {
-        onSuccess();
+        setShowSetupModal(false);
+        setCurrentStep(0);
+        // Reset form data
+        setFormData({
+          gender: "",
+          height_cm: 170,
+          weight_kg: 70,
+          goal: "",
+          activity_level: "",
+        });
+        await refreshData();
+        // Optional: Show success message
+        alert("Profile updated successfully!");
       } else {
-        alert('Failed to update profile');
+        console.error("Setup submit error:", result);
+        alert(`Error: ${result.error || "Failed to update profile"}`);
       }
     } catch (error) {
-      alert('Error updating profile');
+      console.error("Setup submit error:", error);
+      alert("An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  async function handleWeightUpdate() {
+    if (!newWeight || isNaN(Number(newWeight))) return;
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+
+    const response = await fetch("/api/member/update_weight", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ weight_kg: Number(newWeight) }),
+    });
+
+    if (response.ok) {
+      setShowWeightUpdateModal(false);
+      setNewWeight("");
+      refreshData();
+    } else {
+      const result = await response.json();
+      console.error("Weight update error:", result.error);
+      alert(result.error || "Failed to update weight");
+    }
+  }
+
+  if (loading) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="animate-spin" size={48} /></div>;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Full Name</label>
-        <input
-          type="text"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          required
-        />
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6 p-6 mt-15 min-h-screen"
+    >
+      {/* Setup Modal */}
+      <Dialog open={showSetupModal} onOpenChange={(open) => !open && refreshData()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{steps[currentStep].title}</DialogTitle>
+          </DialogHeader>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentStep}
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 50 }}
+              transition={{ duration: 0.3 }}
+            >
+              {steps[currentStep].content}
+            </motion.div>
+          </AnimatePresence>
+          <div className="flex justify-between mt-6">
+            {currentStep > 0 && (
+              <Button variant="outline" onClick={() => setCurrentStep(currentStep - 1)}>
+                Back
+              </Button>
+            )}
+            
+            <Button
+              disabled={!steps[currentStep].isValid() || loading}
+              onClick={() => {
+                  if (currentStep < steps.length - 1) {
+                  setCurrentStep(currentStep + 1);
+                  } else {
+                  handleSetupSubmit();
+                  }
+              }}
+              className="mt-2"
+            >
+              {loading ? (
+                  <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {currentStep < steps.length - 1 ? "Loading..." : "Saving..."}
+                  </>
+              ) : (
+                  currentStep < steps.length - 1 ? "Next" : "Submit"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Weight Update Modal */}
+      <Dialog open={showWeightUpdateModal} onOpenChange={setShowWeightUpdateModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Today`s Weight</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Label htmlFor="new-weight">Enter your current weight (kg)</Label>
+            <Input
+              id="new-weight"
+              type="number"
+              value={newWeight}
+              onChange={(e) => setNewWeight(e.target.value)}
+              step="0.1"
+            />
+          </div>
+          <Button onClick={handleWeightUpdate} disabled={!newWeight || isNaN(Number(newWeight))}>
+            Submit
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3 }}>
+          <Card className=" shadow-lg rounded-xl overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-blue-200 to-blue-300 ">
+              <CardTitle className="flex items-center pt-1"><Target className="mr-2" /> Plan</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="text-sm text-muted-foreground">Selected plan</div>
+              <div className="mt-2 font-semibold text-lg">{profile?.plan ?? "No plan assigned"}</div>
+              {profile?.plan_start && (
+                <Badge variant="secondary" className="mt-2">
+                  Started: {new Date(profile.plan_start).toLocaleDateString()}
+                </Badge>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.1 }}>
+          <Card className=" shadow-lg rounded-xl overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-green-200 to-green-300 ">
+              <CardTitle className="flex items-center pt-1"><Scale className="mr-2" /> Weight</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="text-sm text-muted-foreground">Latest</div>
+              <div className="mt-2 text-2xl font-bold">{lastWeight ? `${lastWeight.weight_kg} kg` : "No data"}</div>
+              <div className="text-xs text-muted-foreground mt-1">{weightUpdatedAgo ? `Updated ${weightUpdatedAgo} ago` : "-"}</div>
+              <div className="mt-3 flex gap-2">
+                {isStale && (
+                  <Button variant="default" onClick={() => setShowWeightUpdateModal(true)}>
+                    Update Today`s Weight
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }}>
+          <Card className=" shadow-lg rounded-xl overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-purple-200 to-purple-300 ">
+              <CardTitle className="flex items-center"><Ruler className="mr-2" /> Height & BMI</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="text-sm text-muted-foreground">Height</div>
+              <div className="mt-2 font-semibold">{profile?.height_cm ? `${profile.height_cm} cm` : "—"}</div>
+              <div className="text-sm text-muted-foreground mt-3">BMI</div>
+              <div className="mt-2 font-semibold">{profile?.bmi ?? "—"}</div>
+              <div className="text-xs text-muted-foreground mt-2 flex items-center">
+                <Activity className="mr-1" size={14} /> Level: {profile?.activity_level ?? "—"}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Phone</label>
-        <input
-          type="tel"
-          value={formData.phone}
-          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+        <Card className=" shadow-lg rounded-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-orange-200 to-orange-300 ">
+            <CardTitle className="flex items-center"><BarChart2 className="mr-2" /> Weight Tracking</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={weightHistory.map((d) => ({ date: new Date(d.recorded_at).toLocaleDateString(), weight: d.weight_kg }))}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="weight" stroke="#8884d8" activeDot={{ r: 8 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </motion.div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Height (cm)</label>
-          <input
-            type="number"
-            value={formData.height_cm}
-            onChange={(e) => setFormData({ ...formData, height_cm: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Weight (kg)</label>
-          <input
-            type="number"
-            step="0.1"
-            value={formData.weight_kg}
-            onChange={(e) => setFormData({ ...formData, weight_kg: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Fitness Goal</label>
-        <textarea
-          value={formData.goal}
-          onChange={(e) => setFormData({ ...formData, goal: e.target.value })}
-          rows={3}
-          placeholder="Describe the member's fitness goals..."
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <div className="flex gap-2 pt-4">
-        <Button type="submit" className="flex-1" disabled={loading}>
-          {loading ? 'Updating...' : 'Update Profile'}
-        </Button>
-        <Button 
-          type="button" 
-          variant="outline" 
-          onClick={() => onSuccess()}
-          disabled={loading}
-        >
-          Cancel
-        </Button>
-      </div>
-    </form>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+        <Card className=" shadow-lg rounded-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-teal-200 to-teal-300 ">
+            <CardTitle className="flex items-center pt-2 "><User className="mr-2 " /> Assigned Staff</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-2">
+            <div className="flex items-center">
+              <Apple className="mr-2 text-teal-600" /> Nutritionist: {nutritionist?.full_name ?? "Not assigned"}
+            </div>
+            <div className="flex items-center">
+              <User className="mr-2 text-teal-600" /> Trainer: {trainer?.full_name ?? "Not assigned"}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    </motion.div>
   );
 }

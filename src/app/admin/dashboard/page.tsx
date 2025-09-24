@@ -81,6 +81,7 @@ export default function AdminDashboard() {
     totalNutritionists: 0,
     monthlyRevenue: 0,
   });
+  
   const router = useRouter();
 
   useEffect(() => {
@@ -254,6 +255,7 @@ export default function AdminDashboard() {
                         key={member.id}
                         className="flex items-center justify-between p-4 dark:bg-gray-300 dark:hover:bg-gray-400 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                         style={{ animationDelay: `${index * 0.1}s` }}
+                        
                       >
                         <div className="flex items-center space-x-4">
                           <Avatar className="h-12 w-12">
@@ -321,7 +323,11 @@ export default function AdminDashboard() {
                                   <UserPlus className="h-4 w-4 mr-2" />
                                   Assign/Update Trainer & Nutritionist
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleViewMemberProfile(member)}>
+                                <DropdownMenuItem onClick={(e) => {
+                          if (!(e.target as HTMLElement).closest('button')) {
+                            router.push(`/member/${member.id}`); // ← Added dynamic routing
+                          }
+                        }}>
                                   <Eye className="h-4 w-4 mr-2" />
                                   View Full Profile
                                 </DropdownMenuItem>
@@ -551,59 +557,57 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
   const [selectedNutritionist, setSelectedNutritionist] = useState<string>("");
 
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
+  e.preventDefault();
+  setLoading(true);
 
-    const formData = new FormData(e.currentTarget as HTMLFormElement);
-    const body = Object.fromEntries(formData.entries());
+  const formData = new FormData(e.currentTarget as HTMLFormElement);
+  const body = Object.fromEntries(formData.entries());
 
-    try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session?.access_token) {
-        alert("Session expired. Please log in again.");
-        return;
-      }
-
-      // Step 1: create user in auth + users table via API
-      const res = await fetch("/api/users/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ 
-          email: body.email,
-          password: body.password,
-          name: body.name || null,
-          role,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        alert(`Failed to create user: ${errorData.error || "Unknown error"}`);
-        return;
-      }
-
-      const { user } = await res.json();
-
-      // Step 2: create empty profile for member with trainer/nutritionist assignment
-      if (role === "member") {
-        await supabase.from("member_profiles").insert({
-          user_id: user.id,
-          assigned_trainer_id: selectedTrainer || null,
-          assigned_nutritionist_id: selectedNutritionist || null,
-        });
-      }
-
-      alert(`${role} created successfully!`);
-      onSuccess?.();
-    } catch (err: any) {
-      alert(`Failed to create user: ${err.message || "Unexpected error"}`);
-    } finally {
-      setLoading(false);
+  try {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session?.access_token) {
+      alert("Session expired. Please log in again.");
+      return;
     }
+
+    // Step 1: create user in API
+    const res = await fetch("/api/users/create", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        email: body.email,
+        password: body.password,
+        name: body.name || null,
+        role,
+        height_cm: body.height_cm || null,
+        weight_kg: body.weight_kg || null,
+        plan: body.plan || null,
+        dob: body.dob || null,
+        gender: body.gender || null,
+        
+        trainer_id: selectedTrainer && selectedTrainer !== "none" ? selectedTrainer : null,
+        nutritionist_id: selectedNutritionist && selectedNutritionist !== "none" ? selectedNutritionist : null,
+      }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      alert(`Failed to create user: ${errorData.error || "Unknown error"}`);
+      return;
+    }
+
+    alert(`${role} created successfully!`);
+    onSuccess?.();
+  } catch (err: any) {
+    alert(`Failed to create user: ${err.message || "Unexpected error"}`);
+  } finally {
+    setLoading(false);
   }
+}
+
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -626,6 +630,44 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
             <Label htmlFor="phone">Phone (Optional)</Label>
             <Input name="phone" placeholder="Phone Number" />
           </div>
+          <div>
+      <label htmlFor="height_cm">Height (cm)</label>
+      <input type="number" name="height_cm" id="height_cm" className="input" />
+    </div>
+
+    <div>
+      <label htmlFor="weight_kg">Weight (kg)</label>
+      <input type="number" name="weight_kg" id="weight_kg" className="input" />
+    </div>
+
+    <div>
+      <label htmlFor="plan">Plan</label>
+      <select name="plan" id="plan" className="input">
+        <option value="">Select Plan</option>
+        <option value="yearly">yearly</option>
+        <option value="half-yearly">half-yearly</option>
+        <option value="Quarterly">Quarterly</option>
+      </select>
+    </div>
+
+    <div>
+      <label htmlFor="dob">Date of Birth</label>
+      <input type="date" name="dob" id="dob" className="input" />
+    </div>
+
+    <div>
+      <label htmlFor="gender">Gender</label>
+      <select name="gender" id="gender" className="input">
+        <option value="">Select Gender</option>
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+
+    
+
+   
 
           <div className="space-y-4">
             <h4 className="font-medium text-sm">Assignment (Optional)</h4>
@@ -896,8 +938,9 @@ function AssignmentForm({
 
       <div className="flex justify-end space-x-2 pt-4">
         <Button type="submit" disabled={loading}>
-          {loading ? "Updating..." : "Update Assignments"}
-        </Button>
+  {loading ? "Updating..." : "Update Assignments"}
+</Button>
+
       </div>
     </form>
   );

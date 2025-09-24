@@ -70,21 +70,7 @@ export async function POST(req: Request) {
     }
 
     // Fetch trainer name if assigned_trainer_id exists
-    let trainer_name = null;
-    if (upserted.assigned_trainer_id) {
-      const { data: trainerData, error: trainerErr } = await supabaseAdmin
-        .from("trainers_profile")
-        .select("full_name")
-        .eq("user_id", upserted.assigned_trainer_id)
-        .single();
 
-      if (trainerErr) {
-        console.error("Fetch trainer name error:", trainerErr);
-        // Don't fail the whole operation, just log and proceed without trainer name
-      } else if (trainerData) {
-        trainer_name = trainerData.full_name;
-      }
-    }
     
 
     // Insert into weight_history
@@ -100,7 +86,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ 
         profile: upserted, 
         bmi, 
-        trainer_name,
         warning: "Profile updated but weight history failed to save" 
       }, { status: 200 });
     }
@@ -108,7 +93,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ 
       profile: upserted, 
       bmi,
-      trainer_name,
       success: true 
     }, { status: 200 });
 

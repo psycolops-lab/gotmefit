@@ -1,83 +1,89 @@
+
 "use client";
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { 
-  Popover, 
-  PopoverContent, 
-  PopoverTrigger 
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { 
-  format, 
-  formatDistanceToNowStrict 
-} from "date-fns";
-import { 
-  CalendarIcon, 
-  User, 
-  FileText, 
-  Loader2, 
-  AlertCircle 
-} from "lucide-react";
+import { Loader2, User, Apple, AlertCircle, BarChart2 } from "lucide-react";
+import { formatDistanceToNowStrict } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+
+type DietHistory = {
+  id: string;
+  member_id: string;
+  nutritionist_id: string;
+  diet_entry: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  recorded_at: string;
+};
+
+type DietChartData = {
+  date: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+};
 
 type Member = {
   id: string;
   user_id: string;
-  name: string; // Changed from full_name to name
+  name: string;
   email?: string;
-  gender?: string | null;
   goal?: string | null;
-  weight_kg?: number | null;
-  current_diet?: string | null;
-  latest_diet_date?: string | null;
-};
-
-type DietPlan = {
-  id: string;
-  member_id: string;
-  nutritionist_id: string;
-  diet_details: string;
-  start_date?: string | null;
-  end_date?: string | null;
+  activity_level?: string | null;
+  latest_diet?: DietHistory | null;
   created_at: string;
-  updated_at: string;
 };
 
 export default function NutritionistDashboardPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null);
+  const [updating, setUpdating] = useState<string | null>(null);
   const [showDietModal, setShowDietModal] = useState(false);
+  const [showChartModal, setShowChartModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [dietForm, setDietForm] = useState({
-    details: "",
-    startDate: new Date(),
-    endDate: new Date(),
+  const [newDiet, setNewDiet] = useState({
+    diet_entry: "",
+    calories: "",
+    protein: "",
+    carbs: "",
+    fats: "",
   });
   const [error, setError] = useState<string | null>(null);
+  const [dietHistory, setDietHistory] = useState<DietHistory[]>([]);
+  const [chartData, setChartData] = useState<DietChartData[]>([]);
 
   useEffect(() => {
     loadMembers();
@@ -86,299 +92,222 @@ export default function NutritionistDashboardPage() {
   async function loadMembers() {
     setLoading(true);
     setError(null);
-    
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user?.id) {
-        setError("Not authenticated");
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.user?.id) {
+        console.error("loadMembers: Session error:", { message: sessionError?.message });
+        setError("Not authenticated. Please log in.");
         setLoading(false);
         return;
       }
 
-      // Step 1: Fetch assigned members from member_profiles
+      console.log("loadMembers: Session retrieved:", {
+        userId: session.user.id,
+        email: session.user.email,
+      });
+
+      // Fetch assigned members
       const { data: memberProfiles, error: mpError } = await supabase
         .from("member_profiles")
         .select(`
           id,
           user_id,
-          gender,
           goal,
-          weight_kg
+          activity_level,
+          created_at,
+          assigned_nutritionist_id
         `)
         .eq("assigned_nutritionist_id", session.user.id)
         .order("created_at", { ascending: true });
 
-      if (mpError) throw mpError;
+      if (mpError) {
+        console.error("loadMembers: member_profiles error:", mpError);
+        throw new Error(`Failed to fetch member profiles: ${mpError.message}`);
+      }
+
+      console.log("loadMembers: member_profiles:", memberProfiles);
 
       if (!memberProfiles || memberProfiles.length === 0) {
+        console.log("loadMembers: No members assigned");
         setMembers([]);
+        setError("No members assigned to you.");
         setLoading(false);
         return;
       }
 
-      // Step 2: Extract member user_ids
       const memberIds = memberProfiles.map(m => m.user_id);
 
-      // Step 3: Fetch member details (name, email) from users table
+      // Fetch member details from users
       const { data: userDetails, error: userError } = await supabase
         .from("users")
-        .select("user_id, name, email") // Changed full_name to name
-        .in("user_id", memberIds);
+        .select("id, name, email")
+        .in("id", memberIds);
 
-      if (userError) throw userError;
+      if (userError) {
+        console.error("loadMembers: users error:", userError);
+        throw new Error(`Failed to fetch user details: ${userError.message}`);
+      }
 
-      // Step 4: Fetch latest diet plans
-      let latestDiets: DietPlan[] = [];
-      const { data: diets, error: dietError } = await supabase
-        .from("diet_plans")
+      console.log("loadMembers: userDetails:", userDetails);
+
+      // Fetch latest diet history
+      const { data: allDietHistory, error: dietError } = await supabase
+        .from("diet_history")
         .select("*")
         .in("member_id", memberIds)
-        .order("created_at", { ascending: false });
+        .order("recorded_at", { ascending: false });
 
-      if (dietError) throw dietError;
-      latestDiets = diets || [];
+      if (dietError) {
+        console.error("loadMembers: diet_history error:", dietError);
+        throw new Error(`Failed to fetch diet history: ${dietError.message}`);
+      }
 
-      // Step 5: Get latest diet for each member
-      const dietMap = new Map<string, DietPlan>();
-      latestDiets.forEach(diet => {
-        if (!dietMap.has(diet.member_id)) {
-          dietMap.set(diet.member_id, diet);
+      console.log("loadMembers: allDietHistory:", allDietHistory);
+
+      const dietMap = new Map<string, DietHistory>();
+      allDietHistory?.forEach(dh => {
+        if (!dietMap.has(dh.member_id)) {
+          dietMap.set(dh.member_id, dh);
         }
       });
 
-      // Step 6: Merge all data
       const mergedMembers: Member[] = memberProfiles.map(member => {
-        // Find user details
-        const userDetail = userDetails?.find(u => u.user_id === member.user_id);
-        
-        // Find latest diet
+        const userDetail = userDetails?.find(u => u.id === member.user_id);
         const latestDiet = dietMap.get(member.user_id);
-        
+
         return {
-          ...member,
-          name: userDetail?.name || "Unknown User", // Changed from full_name to name
+          id: member.id,
+          user_id: member.user_id,
+          name: userDetail?.name || "Unknown User",
           email: userDetail?.email,
-          current_diet: latestDiet?.diet_details || null,
-          latest_diet_date: latestDiet?.created_at,
+          goal: member.goal,
+          activity_level: member.activity_level,
+          latest_diet: latestDiet || null,
+          created_at: member.created_at,
         };
       });
 
+      console.log("loadMembers: mergedMembers:", mergedMembers);
       setMembers(mergedMembers);
     } catch (err: any) {
-      console.error("Error loading members:", err);
-      setError("Failed to load members: " + err.message);
+      console.error("loadMembers: Error:", err);
+      setError(`Failed to load members: ${err.message}`);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleAssignDiet() {
-    if (!selectedMember || !dietForm.details.trim()) {
-      setError("Please enter diet details");
-      return;
-    }
-
-    setSaving(selectedMember.user_id);
-    setError(null);
-
+  async function loadDietHistory(memberId: string) {
     try {
-      // Get session token
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error("Authentication required");
+      const { data: history, error } = await supabase
+        .from("diet_history")
+        .select("*")
+        .eq("member_id", memberId)
+        .order("recorded_at", { ascending: true });
+
+      if (error) {
+        console.error("loadDietHistory: Error:", error);
+        throw new Error(`Failed to fetch diet history: ${error.message}`);
       }
 
-      // Call the backend API route
-      const response = await fetch("/api/nutritionist/assign-diet", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          member_user_id: selectedMember.user_id,
-          diet_details: dietForm.details.trim(),
-          start_date: dietForm.startDate.toISOString(),
-          end_date: dietForm.endDate.toISOString(),
-        }),
-      });
+      const chartData: DietChartData[] = (history || []).map(h => ({
+        date: new Date(h.recorded_at).toLocaleDateString(),
+        calories: h.calories,
+        protein: h.protein,
+        carbs: h.carbs,
+        fats: h.fats,
+      }));
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to assign diet");
-      }
-
-      // Update local state immediately for better UX
-      setMembers(prev => prev.map(member => 
-        member.user_id === selectedMember.user_id
-          ? {
-              ...member,
-              current_diet: dietForm.details,
-              latest_diet_date: new Date().toISOString(),
-            }
-          : member
-      ));
-
-      // Reset modal
-      setShowDietModal(false);
-      setDietForm({ details: "", startDate: new Date(), endDate: new Date() });
-      setSelectedMember(null);
-      setError(null);
-      
-      // Show success and refresh data
-      setTimeout(() => {
-        alert("Diet plan assigned successfully!");
-        loadMembers(); // Refresh to get server timestamps and ensure consistency
-      }, 100);
-
+      console.log("loadDietHistory: chartData:", chartData);
+      setDietHistory(history || []);
+      setChartData(chartData);
     } catch (err: any) {
-      console.error("Error assigning diet:", err);
-      setError("Failed to assign diet: " + err.message);
-    } finally {
-      setSaving(null);
+      console.error("loadDietHistory: Error:", err);
+      setError(`Failed to load diet history: ${err.message}`);
     }
   }
 
-  const DietModal = () => (
-    <Dialog open={showDietModal} onOpenChange={setShowDietModal}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Assign Diet Plan</DialogTitle>
-          <DialogDescription>
-            Create a personalized diet plan for {selectedMember?.name}. This will be visible in their member dashboard. {/* Changed from full_name */}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="diet-details">Diet Plan Details</Label>
-            <Textarea
-              id="diet-details"
-              value={dietForm.details}
-              onChange={(e) => setDietForm({ ...dietForm, details: e.target.value })}
-              placeholder="Enter detailed diet plan including:
-- Breakfast, lunch, dinner, and snacks
-- Calorie breakdown
-- Macronutrient ratios
-- Special instructions
-- Hydration goals
-- Any restrictions or preferences..."
-              className="min-h-[120px] mt-1"
-              rows={8}
-            />
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Start Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal mt-1",
-                      !dietForm.startDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dietForm.startDate ? format(dietForm.startDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={dietForm.startDate}
-                    onSelect={(date) => date && setDietForm({ ...dietForm, startDate: date })}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            
-            <div>
-              <Label>End Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal mt-1",
-                      !dietForm.endDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dietForm.endDate ? format(dietForm.endDate, "PPP") : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={dietForm.endDate}
-                    onSelect={(date) => date && setDietForm({ ...dietForm, endDate: date })}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
+  async function handleUpdateDiet() {
+    if (!selectedMember || !newDiet.diet_entry || !newDiet.calories) {
+      setError("Please enter diet entry and calories");
+      return;
+    }
 
-          {selectedMember?.weight_kg && (
-            <div className="p-3 bg-blue-50 rounded-md border">
-              <div className="text-sm text-blue-800">
-                <strong>Member Info:</strong> {selectedMember.name} • {selectedMember.weight_kg}kg {/* Changed from full_name */}
-                {selectedMember.goal && (
-                  <span className="ml-2">• Goal: {selectedMember.goal}</span>
-                )}
-              </div>
-            </div>
-          )}
+    setUpdating(selectedMember.user_id);
+    setError(null);
 
-          {error && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="p-3 bg-red-50 border border-red-200 rounded-md flex items-center text-red-700 text-sm"
-            >
-              <AlertCircle className="h-4 w-4 mr-2" />
-              {error}
-            </motion.div>
-          )}
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        throw new Error("Authentication required");
+      }
 
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => {
-                setShowDietModal(false);
-                setDietForm({ details: "", startDate: new Date(), endDate: new Date() });
-                setSelectedMember(null);
-                setError(null);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleAssignDiet}
-              disabled={!dietForm.details.trim() || saving === selectedMember?.user_id}
-            >
-              {saving === selectedMember?.user_id ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                "Assign Diet Plan"
-              )}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+      const payload = {
+        member_user_id: selectedMember.user_id,
+        diet_entry: newDiet.diet_entry.trim(),
+        calories: Number(newDiet.calories),
+        protein: Number(newDiet.protein || 0),
+        carbs: Number(newDiet.carbs || 0),
+        fats: Number(newDiet.fats || 0),
+      };
+
+      console.log("handleUpdateDiet: Payload:", payload);
+
+      const response = await fetch("/api/nutritionist/update-diet", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        console.error("handleUpdateDiet: API error:", result);
+        throw new Error(result.error || "Failed to update diet");
+      }
+
+      setMembers(prev =>
+        prev.map(member =>
+          member.user_id === selectedMember.user_id
+            ? {
+                ...member,
+                latest_diet: {
+                  id: "temp-" + Date.now(),
+                  member_id: member.user_id,
+                  nutritionist_id: session.user.id,
+                  ...payload,
+                  recorded_at: new Date().toISOString(),
+                },
+              }
+            : member
+        )
+      );
+
+      setShowDietModal(false);
+      setNewDiet({
+        diet_entry: "",
+        calories: "",
+        protein: "",
+        carbs: "",
+        fats: "",
+      });
+      setSelectedMember(null);
+      alert("Diet updated successfully!");
+      loadMembers();
+    } catch (err: any) {
+      console.error("handleUpdateDiet: Error:", err);
+      setError(`Failed to update diet: ${err.message}`);
+    } finally {
+      setUpdating(null);
+    }
+  }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex h-[60vh] items-center justify-center">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
@@ -393,29 +322,21 @@ export default function NutritionistDashboardPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6 p-6 bg-gradient-to-br from-emerald-50 to-teal-50 min-h-screen mt-16"
+      className="space-y-6 p-6 min-h-screen mt-16"
     >
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Nutritionist Dashboard</h1>
-          <p className="text-gray-600">
-            Manage personalized diet plans for your assigned members ({members.length})
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Nutritionist Dashboard</h1>
+          <p className="text-gray-600 dark:text-white">Manage your assigned members ({members.length})</p>
         </div>
-        <Button onClick={loadMembers} variant="outline">
-          Refresh
-        </Button>
-      </motion.div>
+        <Button onClick={loadMembers} variant="outline">Refresh</Button>
+      </div>
 
       {error && (
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center"
+          className="p-4 border border-red-200 rounded-lg flex items-center"
         >
           <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
           <span className="text-red-700">{error}</span>
@@ -429,9 +350,9 @@ export default function NutritionistDashboardPage() {
             animate={{ opacity: 1, scale: 1 }}
             className="text-center py-12"
           >
-            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No members assigned</h3>
-            <p className="text-gray-500">You don&apos;t have any members assigned to you yet. Contact admin to get assignments.</p>
+            <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No members assigned</h3>
+            <p className="text-gray-500 dark:text-white">You don&apos;t have any members assigned to you yet. Contact admin to get assignments.</p>
           </motion.div>
         ) : (
           <motion.div
@@ -441,100 +362,89 @@ export default function NutritionistDashboardPage() {
             <div className="rounded-lg border bg-card overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-gray-50">
-                    <TableHead className="w-[250px]">Member</TableHead>
-                    <TableHead>Current Weight</TableHead>
-                    <TableHead>Goal</TableHead>
-                    <TableHead className="max-w-[300px]">Current Diet Plan</TableHead>
-                    <TableHead>Last Updated</TableHead>
+                  <TableRow className="">
+                    <TableHead>Member</TableHead>
+                    
+                    {/* <TableHead>Activity Level</TableHead> */}
+                    <TableHead>Latest Diet</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {members.map((member) => (
-                    <TableRow key={member.id} className="border-b hover:bg-gray-50">
+                  {members.map(member => (
+                    <TableRow key={member.id} className="border-b ">
                       <TableCell className="font-medium">
-                        <div>
-                          <div className="font-semibold">{member.name}</div> {/* Changed from full_name */}
+                        
+                          <div className="font-semibold">{member.name}</div>
                           {member.email && (
                             <div className="text-sm text-gray-500">{member.email}</div>
                           )}
-                          {member.gender && (
-                            <div className="text-xs text-gray-400 capitalize">{member.gender}</div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-sm">
-                          {member.weight_kg ? `${member.weight_kg.toFixed(1)} kg` : "—"}
+                        </TableCell>
+                      
+                      {/* <TableCell>
+                        <Badge variant="outline" className="capitalize">
+                          {member.activity_level ?? "—"}
                         </Badge>
-                      </TableCell>
+                      </TableCell> */}
                       <TableCell>
-                        <Badge variant="secondary" className="capitalize">
-                          {member.goal ?? "General Fitness"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[300px]">
                         <div className="space-y-1">
-                          {member.current_diet ? (
+                          {member.latest_diet ? (
                             <>
                               <div className="text-sm font-medium text-gray-900">
-                                {member.current_diet.length > 60 
-                                  ? `${member.current_diet.substring(0, 60)}...` 
-                                  : member.current_diet
-                                }
+                                {member.latest_diet.diet_entry.length > 60
+                                  ? `${member.latest_diet.diet_entry.substring(0, 60)}...`
+                                  : member.latest_diet.diet_entry}
                               </div>
-                              {member.latest_diet_date && (
-                                <div className="text-xs text-gray-500">
-                                  Updated {formatDistanceToNowStrict(new Date(member.latest_diet_date))} ago
-                                </div>
-                              )}
+                              <div className="text-xs text-gray-500">
+                                Updated {formatDistanceToNowStrict(new Date(member.latest_diet.recorded_at))} ago
+                              </div>
                             </>
                           ) : (
-                            <span className="text-sm text-gray-500 italic">No diet plan assigned yet</span>
+                            <span className="text-sm text-gray-500 italic">No diet assigned yet</span>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="text-sm text-gray-500">
-                          {member.latest_diet_date ? 
-                            formatDistanceToNowStrict(new Date(member.latest_diet_date)) + " ago" : 
-                            "Never"
-                          }
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button 
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedMember(member);
-                                setDietForm({
-                                  details: member.current_diet ?? "",
-                                  startDate: new Date(),
-                                  endDate: new Date(),
-                                });
-                                setShowDietModal(true);
-                              }}
-                              disabled={saving === member.user_id}
-                            >
-                              {saving === member.user_id ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Saving...
-                                </>
-                              ) : (
-                                <>
-                                  <FileText className="h-4 w-4 mr-2" />
-                                  {member.current_diet ? "Update Diet" : "Assign Diet"}
-                                </>
-                              )}
-                            </Button>
-                          </DialogTrigger>
-                          <DietModal />
-                        </Dialog>
+                      <TableCell className="text-right space-x-2">
+                        {/* <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedMember(member);
+                            setShowChartModal(true);
+                            loadDietHistory(member.user_id);
+                          }}
+                        >
+                          <BarChart2 className="h-4 w-4 mr-2" />
+                          Chart
+                        </Button> */}
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedMember(member);
+                            setNewDiet({
+                              diet_entry: member.latest_diet?.diet_entry || "",
+                              calories: member.latest_diet?.calories.toString() || "",
+                              protein: member.latest_diet?.protein.toString() || "",
+                              carbs: member.latest_diet?.carbs.toString() || "",
+                              fats: member.latest_diet?.fats.toString() || "",
+                            });
+                            setShowDietModal(true);
+                          }}
+                          disabled={updating === member.user_id}
+                        >
+                          {updating === member.user_id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Updating...
+                            </>
+                          ) : (
+                            <>
+                              <Apple className="h-4 w-4 mr-2" />
+                              {member.latest_diet ? "Update Diet" : "Assign Diet"}
+                            </>
+                          )}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -544,6 +454,151 @@ export default function NutritionistDashboardPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Diet Update Modal */}
+      <Dialog open={showDietModal} onOpenChange={(open) => {
+        setShowDietModal(open);
+        if (!open) {
+          setNewDiet({ diet_entry: "", calories: "", protein: "", carbs: "", fats: "" });
+          setSelectedMember(null);
+          setError(null);
+        }
+      }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedMember?.latest_diet ? `Update Diet for ${selectedMember.name}` : `Assign Diet for ${selectedMember?.name}`}
+            </DialogTitle>
+            <DialogDescription>
+              Enter the diet details including daily meal plan and macronutrient breakdown.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="diet_entry">Diet Plan Details</Label>
+              <Input
+                id="diet_entry"
+                value={newDiet.diet_entry}
+                onChange={(e) => setNewDiet({ ...newDiet, diet_entry: e.target.value })}
+                placeholder="e.g., Breakfast: Oatmeal with berries, Lunch: Grilled chicken salad..."
+                className="mt-1"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="calories">Calories (kcal)</Label>
+                <Input
+                  id="calories"
+                  type="number"
+                  value={newDiet.calories}
+                  onChange={(e) => setNewDiet({ ...newDiet, calories: e.target.value })}
+                  placeholder="e.g., 2000"
+                  className="mt-1"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="protein">Protein (g)</Label>
+                <Input
+                  id="protein"
+                  type="number"
+                  value={newDiet.protein}
+                  onChange={(e) => setNewDiet({ ...newDiet, protein: e.target.value })}
+                  placeholder="e.g., 150"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="carbs">Carbs (g)</Label>
+                <Input
+                  id="carbs"
+                  type="number"
+                  value={newDiet.carbs}
+                  onChange={(e) => setNewDiet({ ...newDiet, carbs: e.target.value })}
+                  placeholder="e.g., 200"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="fats">Fats (g)</Label>
+                <Input
+                  id="fats"
+                  type="number"
+                  value={newDiet.fats}
+                  onChange={(e) => setNewDiet({ ...newDiet, fats: e.target.value })}
+                  placeholder="e.g., 70"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md flex items-center text-red-700 text-sm">
+                <AlertCircle className="h-4 w-4 mr-2" />
+                {error}
+              </div>
+            )}
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDietModal(false);
+                  setNewDiet({ diet_entry: "", calories: "", protein: "", carbs: "", fats: "" });
+                  setSelectedMember(null);
+                  setError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateDiet} disabled={updating === selectedMember?.user_id}>
+                {updating === selectedMember?.user_id ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Submit Diet"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Chart Modal */}
+      <Dialog open={showChartModal} onOpenChange={(open) => {
+        setShowChartModal(open);
+        if (!open) {
+          setDietHistory([]);
+          setChartData([]);
+          setSelectedMember(null);
+        }
+      }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Diet Progress for {selectedMember?.name}</DialogTitle>
+            <DialogDescription>Track macronutrient and calorie intake over time.</DialogDescription>
+          </DialogHeader>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={400}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="calories" stroke="#8884d8" name="Calories (kcal)" />
+                <Line type="monotone" dataKey="protein" stroke="#82ca9d" name="Protein (g)" />
+                <Line type="monotone" dataKey="carbs" stroke="#ffc658" name="Carbs (g)" />
+                <Line type="monotone" dataKey="fats" stroke="#ff7300" name="Fats (g)" />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="text-center py-8 ">
+              No diet history available for this member.
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

@@ -1,3 +1,4 @@
+//src/app/api/trainer/options/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
         const userDetail = userDetails?.find(u => u.user_id === trainer.user_id);
         return {
           user_id: trainer.user_id,
-          name: userDetail?.name || "Unknown Trainer",
+          name: userDetail?.name ||  "Unknown Trainer",
         };
       });
     }
