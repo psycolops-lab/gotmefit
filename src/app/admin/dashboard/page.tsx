@@ -246,6 +246,14 @@ export default function AdminDashboard() {
                 </Dialog>
               </CardHeader>
               <CardContent>
+                {/* Header Row */}
+                <div className="grid grid-cols-6 gap-4 px-2 py-2 font-semibold text-gray-700 bg-gray-200 rounded-md mb-2">
+                  <span>Member</span>
+                  <span>Trainer</span>
+                  <span>Nutritionist</span>
+                  <span></span>
+                  <span></span>
+                </div>
                 <div className="space-y-4">
                   {members.length === 0 ? (
                     <p className="text-gray-500">No members found.</p>
@@ -253,88 +261,50 @@ export default function AdminDashboard() {
                     members.slice(0, visibleMembersCount).map((member, index) => (
                       <div
                         key={member.id}
-                        className="flex items-center justify-between p-4 dark:bg-gray-300 dark:hover:bg-gray-400 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                        className="grid grid-cols-6 items-center p-3 dark:bg-gray-300 dark:hover:bg-gray-400 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
                         style={{ animationDelay: `${index * 0.1}s` }}
-                        
+                        onClick={() => {
+                          router.push(`/member/${member.id}`);
+                        }}
                       >
-                        <div className="flex items-center space-x-4">
+                        {/* Profile Pic */}
+                        <div className="flex items-center gap-2">
                           <Avatar className="h-12 w-12">
                             <AvatarImage src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
                             <AvatarFallback>{member.name?.substring(0, 2) || 'M'}</AvatarFallback>
                           </Avatar>
-                          <div>
-                            <h3 className="font-semibold text-black">{member.name || "—"}</h3>
-                            <div className="flex items-center space-x-4 text-sm text-gray-600">
-                              <div className="flex items-center space-x-1">
-                                <Mail className="h-3 w-3" />
-                                <span>{member.email}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-4 text-xs text-gray-500 mt-1">
-                              <span>Trainer: {member.trainer?.name || "Not assigned"}</span>
-                              <span>•</span>
-                              <span>Nutritionist: {member.nutritionist?.name || "Not assigned"}</span>
-                            </div>
-                          </div>
+                          <span className="font-semibold text-black">{member.name || "—"}</span>
                         </div>
-                        <div className="flex items-center space-x-6 text-black">
-                          <div className="text-center">
-                            <p className="text-sm font-medium">{member.profile?.height_cm || "—"} cm</p>
-                            <p className="text-xs text-gray-600">Height</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-sm font-medium">{member.profile?.weight_kg || "—"} kg</p>
-                            <p className="text-xs text-gray-600">Weight</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-sm font-medium">{member.profile?.bmi || "—"}</p>
-                            <p className="text-xs text-gray-600">BMI</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-sm font-medium">{member.profile?.plan || "—"}</p>
-                            <p className="text-xs text-gray-600">Plan</p>
-                          </div>
-                          <div className="text-right">
-                            <Badge variant="default" className="bg-green-600">Active</Badge>
-                            <p className="text-sm text-gray-600">
-                              Joined: {member.created_at ? new Date(member.created_at).toLocaleDateString() : "—"}
-                            </p>
-                          </div>
-                          
-                          {/* Action Buttons */}
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleViewMemberProfile(member)}
-                              title="View Profile"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="icon">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleAssignTrainerNutritionist(member)}>
-                                  <UserPlus className="h-4 w-4 mr-2" />
-                                  Assign/Update Trainer & Nutritionist
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={(e) => {
-                          if (!(e.target as HTMLElement).closest('button')) {
-                            router.push(`/member/${member.id}`); // ← Added dynamic routing
-                          }
-                        }}>
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View Full Profile
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </div>
+                        {/* Trainer Name */}
+                        <span className="text-sm text-gray-700">{member.trainer?.name || "Not assigned"}</span>
+                        {/* Nutritionist Name */}
+                        <span className="text-sm text-gray-700">{member.nutritionist?.name || "Not assigned"}</span>
+                        {/* Status */}
+                        <Badge variant="default" className="bg-green-600">Active</Badge>
+                        {/* Eye Icon */}
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          title="View member info"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleViewMemberProfile(member);
+                          }}
+                        >
+                          <Eye className="h-5 w-5" />
+                        </Button>
+                        {/* Assign Button */}
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          title="Add trainer/nutritionist"
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleAssignTrainerNutritionist(member);
+                          }}
+                        >
+                          <UserPlus className="h-5 w-5" />
+                        </Button>
                       </div>
                     ))
                   )}
