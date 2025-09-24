@@ -751,16 +751,10 @@ const memberId = params.memberID as string;
 }
 
         // Show setup modal **only if the logged-in user is viewing their own dashboard**
-        const requiredMissing =
-          mp?.height_cm == null ||
-          mp?.weight_kg == null ||
-          mp?.gender == null ||
-          mp?.goal == null ||
-          mp?.activity_level == null;
-
-        if (mounted && requiredMissing && isOwnProfile) {
-          setShowSetupModal(true);
-        }
+        if (!mp?.height_cm || !mp?.weight_kg || !mp?.bmi || !mp?.gender || !mp?.goal || !mp?.activity_level) {
+        setShowSetupModal(true);
+      }
+     
       } catch (err) {
         console.error("Error loading member dashboard:", err);
       } finally {

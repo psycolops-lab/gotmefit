@@ -149,9 +149,20 @@
   background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #1d4ed8 100%);
 }
 .glass-effect {
+  background: linear-gradient(
+    to bottom,
+    rgba(14, 116, 144, 0.2), /* A slightly transparent dark cyan */
+    rgba(30, 64, 175, 0.2)  /* A slightly transparent dark blue */
+  );
+
+  /* Glass Effect */
   backdrop-filter: blur(10px);
-  background: rgba(59, 130, 246, 0.1);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  -webkit-backdrop-filter: blur(10px); /* For Safari support */
+  
+  /* Additional Styling for better look */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
 
 .glass-effect-dark {
