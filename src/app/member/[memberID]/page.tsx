@@ -974,7 +974,7 @@ const memberId = params.memberID as string;
         </DialogContent>
       </Dialog>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3 }}>
           <Card className=" shadow-lg rounded-xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-blue-200 to-blue-300 ">
@@ -999,14 +999,16 @@ const memberId = params.memberID as string;
             </CardHeader>
             <CardContent className="pt-4">
               <div className="text-sm text-muted-foreground">Latest</div>
-              <div className="mt-2 text-2xl font-bold">{lastWeight ? `${lastWeight.weight_kg} kg` : "No data"}</div>
-              <div className="text-xs text-muted-foreground mt-1">{weightUpdatedAgo ? `Updated ${weightUpdatedAgo} ago` : "-"}</div>
-              <div className="mt-3 flex gap-2">
+              <div className="flex justify-between items-center text-sm ">
+              <div className="mt-2 text-lg font-bold">{lastWeight ? `${lastWeight.weight_kg} kg` : "No data"}</div>
+              <div className="text-xs text-muted-foreground  items-center flex">{weightUpdatedAgo ? `Updated ${weightUpdatedAgo} ago` : "-"}</div>
+              <div className="mt-2 flex gap-2">
                 {isStale && (
                   <Button variant="default" onClick={() => setShowWeightUpdateModal(true)}>
                     Update Today`s Weight
                   </Button>
                 )}
+              </div>
               </div>
             </CardContent>
           </Card>
@@ -1015,21 +1017,61 @@ const memberId = params.memberID as string;
         <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }}>
           <Card className=" shadow-lg rounded-xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-purple-200 to-purple-300 ">
-              <CardTitle className="flex items-center"><Ruler className="mr-2" /> Height & BMI</CardTitle>
+              <CardTitle className="flex items-center"><Ruler className="mr-2" /> Height </CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">Height</div>
-              <div className="mt-2 font-semibold">{profile?.height_cm ? `${profile.height_cm} cm` : "—"}</div>
-              <div className="text-sm text-muted-foreground mt-3">BMI</div>
-              <div className="mt-2 font-semibold">{profile?.bmi ?? "—"}</div>
-              <div className="text-xs text-muted-foreground mt-2 flex items-center">
-                <Activity className="mr-1" size={14} /> Level: {profile?.activity_level ?? "—"}
-              </div>
+              <div className="text-sm text-muted-foreground mt-1">Height</div>
+              <div className="mt-3 font-semibold">{profile?.height_cm ? `${profile.height_cm} cm` : "—"}</div>
+              
+              
             </CardContent>
           </Card>
         </motion.div>
-      </div>
 
+        <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }}>
+  <Card className=" shadow-lg rounded-xl overflow-hidden">
+    <CardHeader className="bg-gradient-to-r from-red-200 to-red-300 ">
+      <CardTitle className="flex items-center"><Ruler className="mr-2" /> BMI</CardTitle>
+    </CardHeader>
+    <CardContent className="pt-4">
+      <div className="text-sm text-muted-foreground mt-1">
+        BMI
+      </div>
+      <div className="flex justify-between items-center text-sm mt-2">
+        <div className="font-semibold text-lg">{profile?.bmi ?? "—"}</div>
+        <div className="text-xs text-muted-foreground items-center flex">
+          <Activity className="mr-1" size={14} /> {profile?.activity_level ?? "—"}
+        </div>
+      </div>
+      
+    </CardContent>
+  </Card>
+</motion.div>
+      </div>
+<motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+        <Card className=" shadow-lg rounded-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-teal-200 to-teal-300 ">
+            <CardTitle className="flex items-center pt-2 "><User className="mr-2 " /> Assigned Nutritionist</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-2">
+            <div className="flex items-center">
+              <Apple className="mr-2 text-teal-600" /> Nutritionist: {nutritionist?.full_name ?? "Not assigned"}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+        <Card className=" shadow-lg rounded-xl overflow-hidden">
+          <CardHeader className="bg-gradient-to-r from-yellow-100 to-yellow-200 ">
+            <CardTitle className="flex items-center pt-2 "><User className="mr-2 " /> Assigned Trainer</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-2">
+            <div className="flex items-center">
+              <User className="mr-2 text-yellow-400" /> Trainer: {trainer?.full_name ?? "Not assigned"}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
         <Card className=" shadow-lg rounded-xl overflow-hidden">
           <CardHeader className="bg-gradient-to-r from-orange-200 to-orange-300 ">
@@ -1050,21 +1092,7 @@ const memberId = params.memberID as string;
         </Card>
       </motion.div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
-        <Card className=" shadow-lg rounded-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-teal-200 to-teal-300 ">
-            <CardTitle className="flex items-center pt-2 "><User className="mr-2 " /> Assigned Staff</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-2">
-            <div className="flex items-center">
-              <Apple className="mr-2 text-teal-600" /> Nutritionist: {nutritionist?.full_name ?? "Not assigned"}
-            </div>
-            <div className="flex items-center">
-              <User className="mr-2 text-teal-600" /> Trainer: {trainer?.full_name ?? "Not assigned"}
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+      
     </motion.div>
   );
 }
