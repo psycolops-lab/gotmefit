@@ -114,7 +114,7 @@ const newUserId = data.user.id;
         .from("trainers_profile")
         .insert({
           user_id: newUserId,
-          name: name, // Required field
+          full_name: name, // Required field
           specialization: specialization || null,
           experience_years: experience_years ? parseInt(experience_years) : null,
           created_at: new Date().toISOString(),
