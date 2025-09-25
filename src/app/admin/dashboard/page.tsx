@@ -581,112 +581,108 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <Label htmlFor="name">Name (Optional)</Label>
-        <Input name="name" placeholder="Full Name" />
-      </div>
-      <div>
-        <Label htmlFor="email">Email *</Label>
-        <Input type="email" name="email" placeholder="you@example.com" required />
-      </div>
-      <div>
-        <Label htmlFor="password">Password *</Label>
-        <Input type="password" name="password" placeholder="••••••••" required />
-      </div>
-
-      {role === "member" && (
-        <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Column 1 */}
+        <div className="space-y-4">
           <div>
-            <Label htmlFor="phone">Phone (Optional)</Label>
-            <Input name="phone" placeholder="Phone Number" />
+            <Label htmlFor="name">Name (Optional)</Label>
+            <Input name="name" placeholder="Full Name" />
           </div>
           <div>
-      <Label htmlFor="height_cm">Height (cm)</Label>
-      <Input type="number" name="height_cm" id="height_cm" className="input" />
-    </div>
-
-    <div>
-      <Label htmlFor="weight_kg">Weight (kg)</Label>
-      <Input type="number" name="weight_kg" id="weight_kg" className="input" />
-    </div>
-
-    <div>
-      <Label htmlFor="plan">Plan</Label>
-      <select
-              name="plan"
-              id="plan"
-              
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"
-            >
-              <option value="">Select Plan</option>
-              <option value="yearly">Yearly</option>
-              <option value="half-yearly">Half-Yearly</option>
-              <option value="quarterly">Quarterly</option>
-            </select>
-    </div>
-
-    <div>
-      <Label htmlFor="dob">Date of Birth</Label>
-      <Input type="date" name="dob" id="dob" className="input" />
-    </div>
-
-    <div>
-      <Label htmlFor="gender">Gender</Label>
-      <select
-              name="gender"
-              id="gender"
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"
-            >
-              <option value="">Select Gender</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-              <option value="other">Other</option>
-            </select>
-    </div>
-
-    
-
-   
-
-          <div className="space-y-4">
-
-            <div>
-              <Label>Assign Trainer</Label>
-              <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a trainer (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No trainer</SelectItem>
-                  {trainers.map((trainer) => (
-                    <SelectItem key={trainer.id} value={trainer.id}>
-                      {trainer.name || trainer.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Assign Nutritionist</Label>
-              <Select value={selectedNutritionist} onValueChange={setSelectedNutritionist}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a nutritionist (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No nutritionist</SelectItem>
-                  {nutritionists.map((nutritionist) => (
-                    <SelectItem key={nutritionist.id} value={nutritionist.id}>
-                      {nutritionist.name || nutritionist.email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Label htmlFor="email">Email *</Label>
+            <Input type="email" name="email" placeholder="you@example.com" required />
           </div>
-        </>
-      )}
-
+          <div>
+            <Label htmlFor="password">Password *</Label>
+            <Input type="password" name="password" placeholder="••••••••" required />
+          </div>
+          {role === "member" && (
+            <>
+              <div>
+                <Label htmlFor="phone">Phone (Optional)</Label>
+                <Input name="phone" placeholder="Phone Number" />
+              </div>
+              <div>
+                <Label htmlFor="height_cm">Height (cm)</Label>
+                <Input type="number" name="height_cm" id="height_cm" className="input" />
+              </div>
+              <div>
+                <Label htmlFor="weight_kg">Weight (kg)</Label>
+                <Input type="number" name="weight_kg" id="weight_kg" className="input" />
+              </div>
+            </>
+          )}
+        </div>
+        {/* Column 2 */}
+        <div className="space-y-4">
+          {role === "member" && (
+            <>
+              <div>
+                <Label htmlFor="plan">Plan</Label>
+                <select
+                  name="plan"
+                  id="plan"
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"
+                >
+                  <option value="">Select Plan</option>
+                  <option value="yearly">Yearly</option>
+                  <option value="half-yearly">Half-Yearly</option>
+                  <option value="quarterly">Quarterly</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="dob">Date of Birth</Label>
+                <Input type="date" name="dob" id="dob" className="input" />
+              </div>
+              <div>
+                <Label htmlFor="gender">Gender</Label>
+                <select
+                  name="gender"
+                  id="gender"
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"
+                >
+                  <option value="">Select Gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <Label>Assign Trainer</Label>
+                <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a trainer (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No trainer</SelectItem>
+                    {trainers.map((trainer) => (
+                      <SelectItem key={trainer.id} value={trainer.id}>
+                        {trainer.name || trainer.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Assign Nutritionist</Label>
+                <Select value={selectedNutritionist} onValueChange={setSelectedNutritionist}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a nutritionist (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No nutritionist</SelectItem>
+                    {nutritionists.map((nutritionist) => (
+                      <SelectItem key={nutritionist.id} value={nutritionist.id}>
+                        {nutritionist.name || nutritionist.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? `Creating ${role}...` : `Create ${role}`}
       </Button>

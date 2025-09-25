@@ -904,6 +904,18 @@ const memberId = params.memberID as string;
       transition={{ duration: 0.5 }}
       className="space-y-6 p-6 mt-15 min-h-screen"
     >
+      {/* Back to Dashboard Button */}
+      <div className="mb-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push('/admin/dashboard')}
+          className="flex items-center gap-2"
+        >
+          {/* You can use an icon here if desired */}
+          &#8592; Back to Dashboard
+        </Button>
+      </div>
       {/* Setup Modal */}
       <Dialog open={showSetupModal} onOpenChange={(open) => !open && refreshData()}>
         <DialogContent>
@@ -956,7 +968,7 @@ const memberId = params.memberID as string;
       <Dialog open={showWeightUpdateModal} onOpenChange={setShowWeightUpdateModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Update Today`s Weight</DialogTitle>
+            <DialogTitle>Track</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <Label htmlFor="new-weight">Enter your current weight (kg)</Label>
@@ -1002,10 +1014,10 @@ const memberId = params.memberID as string;
               <div className="flex justify-between items-center text-sm ">
               <div className="mt-2 text-lg font-bold">{lastWeight ? `${lastWeight.weight_kg} kg` : "No data"}</div>
               <div className="text-xs text-muted-foreground  items-center flex">{weightUpdatedAgo ? `Updated ${weightUpdatedAgo} ago` : "-"}</div>
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex">
                 {isStale && (
                   <Button variant="default" onClick={() => setShowWeightUpdateModal(true)}>
-                    Update Today`s Weight
+                    Track
                   </Button>
                 )}
               </div>
