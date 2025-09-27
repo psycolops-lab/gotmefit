@@ -35,25 +35,27 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import toast, { Toaster } from "react-hot-toast";
+
+type DietPlan = {
+  id: string;
+  user_email: string;
+  diet_plan: { [key: string]: { [key: string]: string }[] };
+  created_at: string;
+  updated_at: string;
+};
 
 type DietHistory = {
   id: string;
-  member_id: string;
-  nutritionist_id: string;
-  diet_entry: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
-  recorded_at: string;
+  meal_plan_id: string;
+  date: string;
+  intake: { [key: string]: boolean };
+  created_at: string;
 };
 
 type DietChartData = {
   date: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fats: number;
+  completedMeals: number;
 };
 
 type Member = {
@@ -63,8 +65,13 @@ type Member = {
   email?: string;
   goal?: string | null;
   activity_level?: string | null;
-  latest_diet?: DietHistory | null;
+  latest_diet_plan?: DietPlan | null;
   created_at: string;
+};
+
+type MealItem = {
+  name: string;
+  quantity: string;
 };
 
 export default function NutritionistDashboardPage() {
@@ -74,12 +81,10 @@ export default function NutritionistDashboardPage() {
   const [showDietModal, setShowDietModal] = useState(false);
   const [showChartModal, setShowChartModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [newDiet, setNewDiet] = useState({
-    diet_entry: "",
-    calories: "",
-    protein: "",
-    carbs: "",
-    fats: "",
+  const [newDietPlan, setNewDietPlan] = useState({
+    Meal_1: [{ name: "", quantity: "" }],
+    Meal_2: [{ name: "", quantity: "" }],
+    Meal_3: [{ name: "", quantity: "" }],
   });
   const [error, setError] = useState<string | null>(null);
   const [dietHistory, setDietHistory] = useState<DietHistory[]>([]);
@@ -98,6 +103,7 @@ export default function NutritionistDashboardPage() {
       if (sessionError || !session?.user?.id) {
         console.error("loadMembers: Session error:", { message: sessionError?.message });
         setError("Not authenticated. Please log in.");
+        toast.error("Not authenticated. Please log in.");
         setLoading(false);
         return;
       }
@@ -132,6 +138,7 @@ export default function NutritionistDashboardPage() {
         console.log("loadMembers: No members assigned");
         setMembers([]);
         setError("No members assigned to you.");
+        toast.error("No members assigned to you.");
         setLoading(false);
         return;
       }
@@ -151,30 +158,30 @@ export default function NutritionistDashboardPage() {
 
       console.log("loadMembers: userDetails:", userDetails);
 
-      // Fetch latest diet history
-      const { data: allDietHistory, error: dietError } = await supabase
-        .from("diet_history")
+      // Fetch latest diet plans
+      const { data: dietPlans, error: dietError } = await supabase
+        .from("diet")
         .select("*")
-        .in("member_id", memberIds)
-        .order("recorded_at", { ascending: false });
+        .in("user_email", userDetails?.map(u => u.email) || []);
 
       if (dietError) {
-        console.error("loadMembers: diet_history error:", dietError);
-        throw new Error(`Failed to fetch diet history: ${dietError.message}`);
+        console.error("loadMembers: Diet error:", dietError);
+        throw new Error(`Failed to fetch diet plans: ${dietError.message}`);
       }
 
-      console.log("loadMembers: allDietHistory:", allDietHistory);
+      console.log("loadMembers: dietPlans:", dietPlans);
 
-      const dietMap = new Map<string, DietHistory>();
-      allDietHistory?.forEach(dh => {
-        if (!dietMap.has(dh.member_id)) {
-          dietMap.set(dh.member_id, dh);
+      const dietMap = new Map<string, DietPlan>();
+      dietPlans?.forEach(dp => {
+        const user = userDetails?.find(u => u.email === dp.user_email);
+        if (user) {
+          dietMap.set(user.id, dp);
         }
       });
 
       const mergedMembers: Member[] = memberProfiles.map(member => {
         const userDetail = userDetails?.find(u => u.id === member.user_id);
-        const latestDiet = dietMap.get(member.user_id);
+        const latestDietPlan = dietMap.get(member.user_id);
 
         return {
           id: member.id,
@@ -183,7 +190,7 @@ export default function NutritionistDashboardPage() {
           email: userDetail?.email,
           goal: member.goal,
           activity_level: member.activity_level,
-          latest_diet: latestDiet || null,
+          latest_diet_plan: latestDietPlan || null,
           created_at: member.created_at,
         };
       });
@@ -193,6 +200,7 @@ export default function NutritionistDashboardPage() {
     } catch (err: any) {
       console.error("loadMembers: Error:", err);
       setError(`Failed to load members: ${err.message}`);
+      toast.error(`Failed to load members: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -200,11 +208,22 @@ export default function NutritionistDashboardPage() {
 
   async function loadDietHistory(memberId: string) {
     try {
+      const { data: dietPlans, error: dietError } = await supabase
+        .from("diet")
+        .select("id")
+        .eq("user_email", members.find(m => m.user_id === memberId)?.email)
+        .single();
+
+      if (dietError || !dietPlans) {
+        console.error("loadDietHistory: Diet error:", dietError);
+        throw new Error(`Failed to fetch diet plan: ${dietError?.message || "No diet plan found"}`);
+      }
+
       const { data: history, error } = await supabase
         .from("diet_history")
         .select("*")
-        .eq("member_id", memberId)
-        .order("recorded_at", { ascending: true });
+        .eq("meal_plan_id", dietPlans.id)
+        .order("date", { ascending: true });
 
       if (error) {
         console.error("loadDietHistory: Error:", error);
@@ -212,11 +231,8 @@ export default function NutritionistDashboardPage() {
       }
 
       const chartData: DietChartData[] = (history || []).map(h => ({
-        date: new Date(h.recorded_at).toLocaleDateString(),
-        calories: h.calories,
-        protein: h.protein,
-        carbs: h.carbs,
-        fats: h.fats,
+        date: new Date(h.date).toLocaleDateString(),
+        completedMeals: Object.values(h.intake).filter(Boolean).length,
       }));
 
       console.log("loadDietHistory: chartData:", chartData);
@@ -225,12 +241,44 @@ export default function NutritionistDashboardPage() {
     } catch (err: any) {
       console.error("loadDietHistory: Error:", err);
       setError(`Failed to load diet history: ${err.message}`);
+      toast.error(`Failed to load diet history: ${err.message}`);
     }
   }
 
-  async function handleUpdateDiet() {
-    if (!selectedMember || !newDiet.diet_entry || !newDiet.calories) {
-      setError("Please enter diet entry and calories");
+  const addMealItem = (meal: keyof typeof newDietPlan) => {
+    setNewDietPlan(prev => ({
+      ...prev,
+      [meal]: [...prev[meal], { name: "", quantity: "" }],
+    }));
+  };
+
+  const updateMealItem = (meal: keyof typeof newDietPlan, index: number, field: "name" | "quantity", value: string) => {
+    setNewDietPlan(prev => ({
+      ...prev,
+      [meal]: prev[meal].map((item, i) =>
+        i === index ? { ...item, [field]: value } : item
+      ),
+    }));
+  };
+
+  const removeMealItem = (meal: keyof typeof newDietPlan, index: number) => {
+    setNewDietPlan(prev => ({
+      ...prev,
+      [meal]: prev[meal].filter((_, i) => i !== index),
+    }));
+  };
+
+  async function handleUpdateDietPlan() {
+    // Validate that all meals have at least one valid item
+    const isValid = ["Meal_1", "Meal_2", "Meal_3"].every(meal =>
+      newDietPlan[meal as keyof typeof newDietPlan].some(
+        item => item.name.trim() && item.quantity.trim()
+      )
+    );
+
+    if (!selectedMember || !isValid) {
+      setError("Please enter at least one valid item for each meal");
+      toast.error("Please enter at least one valid item for each meal");
       return;
     }
 
@@ -243,30 +291,51 @@ export default function NutritionistDashboardPage() {
         throw new Error("Authentication required");
       }
 
-      const payload = {
-        member_user_id: selectedMember.user_id,
-        diet_entry: newDiet.diet_entry.trim(),
-        calories: Number(newDiet.calories),
-        protein: Number(newDiet.protein || 0),
-        carbs: Number(newDiet.carbs || 0),
-        fats: Number(newDiet.fats || 0),
+      const dietPlan = {
+        Meal_1: newDietPlan.Meal_1
+          .filter(item => item.name.trim() && item.quantity.trim())
+          .map(item => ({ [item.name.trim()]: item.quantity.trim() })),
+        Meal_2: newDietPlan.Meal_2
+          .filter(item => item.name.trim() && item.quantity.trim())
+          .map(item => ({ [item.name.trim()]: item.quantity.trim() })),
+        Meal_3: newDietPlan.Meal_3
+          .filter(item => item.name.trim() && item.quantity.trim())
+          .map(item => ({ [item.name.trim()]: item.quantity.trim() })),
       };
 
-      console.log("handleUpdateDiet: Payload:", payload);
+      const payload = {
+        user_email: selectedMember.email,
+        diet_plan: dietPlan,
+      };
 
-      const response = await fetch("/api/nutritionist/update-diet", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(payload),
-      });
+      console.log("handleUpdateDietPlan: Payload:", payload);
 
-      if (!response.ok) {
-        const result = await response.json();
-        console.error("handleUpdateDiet: API error:", result);
-        throw new Error(result.error || "Failed to update diet");
+      const { data: existingDiet, error: fetchError } = await supabase
+        .from("diet")
+        .select("id")
+        .eq("user_email", selectedMember.email)
+        .single();
+
+      if (fetchError && fetchError.code !== "PGRST116") {
+        console.error("handleUpdateDietPlan: Fetch error:", fetchError);
+        throw new Error(`Failed to check existing diet: ${fetchError.message}`);
+      }
+
+      let response;
+      if (existingDiet) {
+        response = await supabase
+          .from("diet")
+          .update({ diet_plan: dietPlan, updated_at: new Date().toISOString() })
+          .eq("id", existingDiet.id);
+      } else {
+        response = await supabase
+          .from("diet")
+          .insert(payload);
+      }
+
+      if (response.error) {
+        console.error("handleUpdateDietPlan: API error:", response.error);
+        throw new Error(`Failed to update diet plan: ${response.error.message}`);
       }
 
       setMembers(prev =>
@@ -274,12 +343,12 @@ export default function NutritionistDashboardPage() {
           member.user_id === selectedMember.user_id
             ? {
                 ...member,
-                latest_diet: {
-                  id: "temp-" + Date.now(),
-                  member_id: member.user_id,
-                  nutritionist_id: session.user.id,
-                  ...payload,
-                  recorded_at: new Date().toISOString(),
+                latest_diet_plan: {
+                  id: existingDiet?.id || "temp-" + Date.now(),
+                  user_email: selectedMember.email!,
+                  diet_plan: dietPlan,
+                  created_at: existingDiet?.created_at || new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
                 },
               }
             : member
@@ -287,19 +356,18 @@ export default function NutritionistDashboardPage() {
       );
 
       setShowDietModal(false);
-      setNewDiet({
-        diet_entry: "",
-        calories: "",
-        protein: "",
-        carbs: "",
-        fats: "",
+      setNewDietPlan({
+        Meal_1: [{ name: "", quantity: "" }],
+        Meal_2: [{ name: "", quantity: "" }],
+        Meal_3: [{ name: "", quantity: "" }],
       });
       setSelectedMember(null);
-      alert("Diet updated successfully!");
+      toast.success("Diet plan updated successfully!");
       loadMembers();
     } catch (err: any) {
-      console.error("handleUpdateDiet: Error:", err);
-      setError(`Failed to update diet: ${err.message}`);
+      console.error("handleUpdateDietPlan: Error:", err);
+      setError(`Failed to update diet plan: ${err.message}`);
+      toast.error(`Failed to update diet plan: ${err.message}`);
     } finally {
       setUpdating(null);
     }
@@ -324,6 +392,7 @@ export default function NutritionistDashboardPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6 p-6 min-h-screen mt-16"
     >
+      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Nutritionist Dashboard</h1>
@@ -362,50 +431,43 @@ export default function NutritionistDashboardPage() {
             <div className="rounded-lg border bg-card overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="">
+                  <TableRow>
                     <TableHead>Member</TableHead>
-                    
-                    {/* <TableHead>Activity Level</TableHead> */}
-                    <TableHead>Latest Diet</TableHead>
+                    <TableHead>Latest Diet Plan</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {members.map(member => (
-                    <TableRow key={member.id} className="border-b ">
+                    <TableRow key={member.id}>
                       <TableCell className="font-medium">
-                        
-                          <div className="font-semibold">{member.name}</div>
-                          {member.email && (
-                            <div className="text-sm text-gray-500">{member.email}</div>
-                          )}
-                        </TableCell>
-                      
-                      {/* <TableCell>
-                        <Badge variant="outline" className="capitalize">
-                          {member.activity_level ?? "—"}
-                        </Badge>
-                      </TableCell> */}
+                        <div className="font-semibold">{member.name}</div>
+                        {member.email && (
+                          <div className="text-sm text-gray-500">{member.email}</div>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="space-y-1">
-                          {member.latest_diet ? (
+                          {member.latest_diet_plan ? (
                             <>
                               <div className="text-sm font-medium text-gray-900">
-                                {member.latest_diet.diet_entry.length > 60
-                                  ? `${member.latest_diet.diet_entry.substring(0, 60)}...`
-                                  : member.latest_diet.diet_entry}
+                                {Object.entries(member.latest_diet_plan.diet_plan).map(([meal, items]) => (
+                                  <div key={meal}>
+                                    {meal}: {items.map(item => `${Object.keys(item)[0]}: ${Object.values(item)[0]}`).join(", ")}
+                                  </div>
+                                ))}
                               </div>
                               <div className="text-xs text-gray-500">
-                                Updated {formatDistanceToNowStrict(new Date(member.latest_diet.recorded_at))} ago
+                                Updated {formatDistanceToNowStrict(new Date(member.latest_diet_plan.updated_at))} ago
                               </div>
                             </>
                           ) : (
-                            <span className="text-sm text-gray-500 italic">No diet assigned yet</span>
+                            <span className="text-sm text-gray-500 italic">No diet plan assigned yet</span>
                           )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                        {/* <Button
+                        <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
@@ -415,19 +477,26 @@ export default function NutritionistDashboardPage() {
                           }}
                         >
                           <BarChart2 className="h-4 w-4 mr-2" />
-                          Chart
-                        </Button> */}
+                          History
+                        </Button>
                         <Button
                           variant="default"
                           size="sm"
                           onClick={() => {
                             setSelectedMember(member);
-                            setNewDiet({
-                              diet_entry: member.latest_diet?.diet_entry || "",
-                              calories: member.latest_diet?.calories.toString() || "",
-                              protein: member.latest_diet?.protein.toString() || "",
-                              carbs: member.latest_diet?.carbs.toString() || "",
-                              fats: member.latest_diet?.fats.toString() || "",
+                            setNewDietPlan({
+                              Meal_1: member.latest_diet_plan?.diet_plan.Meal_1?.map(item => ({
+                                name: Object.keys(item)[0],
+                                quantity: Object.values(item)[0],
+                              })) || [{ name: "", quantity: "" }],
+                              Meal_2: member.latest_diet_plan?.diet_plan.Meal_2?.map(item => ({
+                                name: Object.keys(item)[0],
+                                quantity: Object.values(item)[0],
+                              })) || [{ name: "", quantity: "" }],
+                              Meal_3: member.latest_diet_plan?.diet_plan.Meal_3?.map(item => ({
+                                name: Object.keys(item)[0],
+                                quantity: Object.values(item)[0],
+                              })) || [{ name: "", quantity: "" }],
                             });
                             setShowDietModal(true);
                           }}
@@ -441,7 +510,7 @@ export default function NutritionistDashboardPage() {
                           ) : (
                             <>
                               <Apple className="h-4 w-4 mr-2" />
-                              {member.latest_diet ? "Update Diet" : "Assign Diet"}
+                              {member.latest_diet_plan ? "Update Diet Plan" : "Assign Diet Plan"}
                             </>
                           )}
                         </Button>
@@ -455,11 +524,15 @@ export default function NutritionistDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Diet Update Modal */}
+      {/* Diet Plan Update Modal */}
       <Dialog open={showDietModal} onOpenChange={(open) => {
         setShowDietModal(open);
         if (!open) {
-          setNewDiet({ diet_entry: "", calories: "", protein: "", carbs: "", fats: "" });
+          setNewDietPlan({
+            Meal_1: [{ name: "", quantity: "" }],
+            Meal_2: [{ name: "", quantity: "" }],
+            Meal_3: [{ name: "", quantity: "" }],
+          });
           setSelectedMember(null);
           setError(null);
         }
@@ -467,70 +540,51 @@ export default function NutritionistDashboardPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {selectedMember?.latest_diet ? `Update Diet for ${selectedMember.name}` : `Assign Diet for ${selectedMember?.name}`}
+              {selectedMember?.latest_diet_plan ? `Update Diet Plan for ${selectedMember.name}` : `Assign Diet Plan for ${selectedMember?.name}`}
             </DialogTitle>
             <DialogDescription>
-              Enter the diet details including daily meal plan and macronutrient breakdown.
+              Enter items and quantities for each meal (e.g., Oats, 50g).
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="diet_entry">Diet Plan Details</Label>
-              <Input
-                id="diet_entry"
-                value={newDiet.diet_entry}
-                onChange={(e) => setNewDiet({ ...newDiet, diet_entry: e.target.value })}
-                placeholder="e.g., Breakfast: Oatmeal with berries, Lunch: Grilled chicken salad..."
-                className="mt-1"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="calories">Calories (kcal)</Label>
-                <Input
-                  id="calories"
-                  type="number"
-                  value={newDiet.calories}
-                  onChange={(e) => setNewDiet({ ...newDiet, calories: e.target.value })}
-                  placeholder="e.g., 2000"
-                  className="mt-1"
-                  required
-                />
+          <div className="space-y-6">
+            {(["Meal_1", "Meal_2", "Meal_3"] as const).map(meal => (
+              <div key={meal}>
+                <Label className="text-lg font-semibold">{meal}</Label>
+                {newDietPlan[meal].map((item, index) => (
+                  <div key={index} className="flex items-center space-x-2 mt-2">
+                    <Input
+                      placeholder="Item (e.g., Oats)"
+                      value={item.name}
+                      onChange={(e) => updateMealItem(meal, index, "name", e.target.value)}
+                      className="flex-1"
+                    />
+                    <Input
+                      placeholder="Quantity (e.g., 50g)"
+                      value={item.quantity}
+                      onChange={(e) => updateMealItem(meal, index, "quantity", e.target.value)}
+                      className="flex-1"
+                    />
+                    {newDietPlan[meal].length > 1 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => removeMealItem(meal, index)}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => addMealItem(meal)}
+                  className="mt-2"
+                >
+                  Add Item
+                </Button>
               </div>
-              <div>
-                <Label htmlFor="protein">Protein (g)</Label>
-                <Input
-                  id="protein"
-                  type="number"
-                  value={newDiet.protein}
-                  onChange={(e) => setNewDiet({ ...newDiet, protein: e.target.value })}
-                  placeholder="e.g., 150"
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="carbs">Carbs (g)</Label>
-                <Input
-                  id="carbs"
-                  type="number"
-                  value={newDiet.carbs}
-                  onChange={(e) => setNewDiet({ ...newDiet, carbs: e.target.value })}
-                  placeholder="e.g., 200"
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="fats">Fats (g)</Label>
-                <Input
-                  id="fats"
-                  type="number"
-                  value={newDiet.fats}
-                  onChange={(e) => setNewDiet({ ...newDiet, fats: e.target.value })}
-                  placeholder="e.g., 70"
-                  className="mt-1"
-                />
-              </div>
-            </div>
+            ))}
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-md flex items-center text-red-700 text-sm">
                 <AlertCircle className="h-4 w-4 mr-2" />
@@ -542,21 +596,25 @@ export default function NutritionistDashboardPage() {
                 variant="outline"
                 onClick={() => {
                   setShowDietModal(false);
-                  setNewDiet({ diet_entry: "", calories: "", protein: "", carbs: "", fats: "" });
+                  setNewDietPlan({
+                    Meal_1: [{ name: "", quantity: "" }],
+                    Meal_2: [{ name: "", quantity: "" }],
+                    Meal_3: [{ name: "", quantity: "" }],
+                  });
                   setSelectedMember(null);
                   setError(null);
                 }}
               >
                 Cancel
               </Button>
-              <Button onClick={handleUpdateDiet} disabled={updating === selectedMember?.user_id}>
+              <Button onClick={handleUpdateDietPlan} disabled={updating === selectedMember?.user_id}>
                 {updating === selectedMember?.user_id ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     Updating...
                   </>
                 ) : (
-                  "Submit Diet"
+                  "Submit Diet Plan"
                 )}
               </Button>
             </div>
@@ -564,7 +622,7 @@ export default function NutritionistDashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Chart Modal */}
+      {/* Diet History Chart Modal */}
       <Dialog open={showChartModal} onOpenChange={(open) => {
         setShowChartModal(open);
         if (!open) {
@@ -575,25 +633,22 @@ export default function NutritionistDashboardPage() {
       }}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Diet Progress for {selectedMember?.name}</DialogTitle>
-            <DialogDescription>Track macronutrient and calorie intake over time.</DialogDescription>
+            <DialogTitle>Diet Adherence for {selectedMember?.name}</DialogTitle>
+            <DialogDescription>Track meal plan adherence over time.</DialogDescription>
           </DialogHeader>
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={400}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
-                <YAxis />
+                <YAxis label={{ value: "Meals Completed", angle: -90, position: "insideLeft" }} />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="calories" stroke="#8884d8" name="Calories (kcal)" />
-                <Line type="monotone" dataKey="protein" stroke="#82ca9d" name="Protein (g)" />
-                <Line type="monotone" dataKey="carbs" stroke="#ffc658" name="Carbs (g)" />
-                <Line type="monotone" dataKey="fats" stroke="#ff7300" name="Fats (g)" />
+                <Line type="monotone" dataKey="completedMeals" stroke="#8884d8" name="Completed Meals" />
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div className="text-center py-8 ">
+            <div className="text-center py-8">
               No diet history available for this member.
             </div>
           )}

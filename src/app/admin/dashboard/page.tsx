@@ -161,10 +161,10 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen pt-20 px-6 space-y-10">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen pt-16 px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
+      <div className="max-w-full sm:max-w-4xl lg:max-w-7xl mx-auto">
         <motion.h1
-          className="text-3xl font-bold mb-5"
+          className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-5"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
@@ -172,7 +172,7 @@ export default function AdminDashboard() {
           Admin Dashboard
         </motion.h1>
         <motion.p
-          className="text-gray-600 dark:text-gray-300"
+          className="text-sm sm:text-base text-gray-600 dark:text-gray-300"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
@@ -182,43 +182,43 @@ export default function AdminDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
         <Card className="animate-scale-in">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Members</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-medium">Total Members</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.totalMembers}</div>
+            <div className="text-xl sm:text-2xl font-bold text-blue-600">{stats.totalMembers}</div>
           </CardContent>
         </Card>
 
         <Card className="animate-scale-in" style={{ animationDelay: '0.1s' }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Trainers</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-medium">Trainers</CardTitle>
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.totalTrainers}</div>
+            <div className="text-xl sm:text-2xl font-bold text-blue-600">{stats.totalTrainers}</div>
           </CardContent>
         </Card>
 
         <Card className="animate-scale-in" style={{ animationDelay: '0.2s' }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Nutritionists</CardTitle>
+            <CardTitle className="text-xs sm:text-sm font-medium">Nutritionists</CardTitle>
             <Utensils className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{stats.totalNutritionists}</div>
+            <div className="text-xl sm:text-2xl font-bold text-blue-600">{stats.totalNutritionists}</div>
           </CardContent>
         </Card>
       </div>
 
       {loading ? (
-        <p className="text-gray-500">Loading users...</p>
+        <p className="text-sm sm:text-base text-gray-500">Loading users...</p>
       ) : (
         <Tabs defaultValue="members" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 sticky top-0 z-10 bg-white dark:bg-gray-800 mb-15 sm:mb-0">
             <TabsTrigger value="members">Members</TabsTrigger>
             <TabsTrigger value="trainers">Trainers</TabsTrigger>
             <TabsTrigger value="nutritionists">Nutritionists</TabsTrigger>
@@ -227,14 +227,14 @@ export default function AdminDashboard() {
           <TabsContent value="members" className="space-y-4">
             <Card className="animate-slide-up">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle>Members Overview</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Members Overview</CardTitle>
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button size="sm">+ Add Member</Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-md">
+                  <DialogContent className="w-full max-w-full sm:max-w-md">
                     <DialogHeader>
-                      <DialogTitle>Create New Member</DialogTitle>
+                      <DialogTitle className="text-base sm:text-lg">Create New Member</DialogTitle>
                     </DialogHeader>
                     <CreateUserForm 
                       role="member" 
@@ -246,72 +246,77 @@ export default function AdminDashboard() {
                 </Dialog>
               </CardHeader>
               <CardContent>
-                {/* Header Row */}
-                <div className="grid grid-cols-6 gap-4 px-2 py-2 font-semibold text-gray-700 bg-gray-200 rounded-md mb-2">
-                  <span>Member</span>
-                  <span>Trainer</span>
-                  <span>Nutritionist</span>
-                  <span></span>
-                  <span></span>
-                </div>
-                <div className="space-y-4">
-                  {members.length === 0 ? (
-                    <p className="text-gray-500">No members found.</p>
-                  ) : (
-                    members.slice(0, visibleMembersCount).map((member, index) => (
-                      <div
-                        key={member.id}
-                        className="grid grid-cols-6 items-center p-3 dark:bg-gray-300 dark:hover:bg-gray-400 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer"
-                        style={{ animationDelay: `${index * 0.1}s` }}
-                        onClick={() => {
-                          router.push(`/member/${member.id}`);
-                        }}
-                      >
-                        {/* Profile Pic */}
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-12 w-12">
-                            <AvatarImage src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
-                            <AvatarFallback>{member.name?.substring(0, 2) || 'M'}</AvatarFallback>
-                          </Avatar>
-                          <span className="font-semibold text-black">{member.name || "—"}</span>
+                <div className="overflow-x-auto">
+                  {/* Header Row */}
+                  <div className="grid grid-cols-6 gap-2 sm:gap-4 px-1 sm:px-2 py-2 font-semibold text-gray-700 bg-gray-200 rounded-md mb-2 min-w-[600px]">
+                    <span className="text-xs sm:text-sm truncate">Member</span>
+                    <span className="text-xs sm:text-sm truncate">Trainer</span>
+                    <span className="text-xs sm:text-sm truncate">Nutritionist</span>
+                    <span className="text-xs sm:text-sm truncate">Status</span>
+                    <span className="text-xs sm:text-sm truncate"></span>
+                    <span className="text-xs sm:text-sm truncate"></span>
+                  </div>
+                  <div className="space-y-4">
+                    {members.length === 0 ? (
+                      <p className="text-sm sm:text-base text-gray-500">No members found.</p>
+                    ) : (
+                      members.slice(0, visibleMembersCount).map((member, index) => (
+                        <div
+                          key={member.id}
+                          className="grid grid-cols-6 items-center p-2 sm:p-3 dark:bg-gray-300 dark:hover:bg-gray-400 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer min-w-[600px]"
+                          style={{ animationDelay: `${index * 0.1}s` }}
+                          onClick={() => {
+                            router.push(`/member/${member.id}`);
+                          }}
+                        >
+                          {/* Profile Pic */}
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
+                              <AvatarImage src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
+                              <AvatarFallback className="text-xs sm:text-sm">{member.name?.substring(0, 2) || 'M'}</AvatarFallback>
+                            </Avatar>
+                            <span className="font-semibold text-black text-xs sm:text-sm truncate">{member.name || "—"}</span>
+                          </div>
+                          {/* Trainer Name */}
+                          <span className="text-xs sm:text-sm text-gray-700 truncate">{member.trainer?.name || "Not assigned"}</span>
+                          {/* Nutritionist Name */}
+                          <span className="text-xs sm:text-sm text-gray-700 truncate">{member.nutritionist?.name || "Not assigned"}</span>
+                          {/* Status */}
+                          <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">Active</Badge>
+                          {/* Eye Icon */}
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            title="View member info"
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleViewMemberProfile(member);
+                            }}
+                            className="h-7 w-7 sm:h-8 sm:w-8"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {/* Assign Button */}
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            title="Add trainer/nutritionist"
+                            onClick={e => {
+                              e.stopPropagation();
+                              handleAssignTrainerNutritionist(member);
+                            }}
+                            className="h-7 w-7 sm:h-8 sm:w-8"
+                          >
+                            <UserPlus className="h-4 w-4" />
+                          </Button>
                         </div>
-                        {/* Trainer Name */}
-                        <span className="text-sm text-gray-700">{member.trainer?.name || "Not assigned"}</span>
-                        {/* Nutritionist Name */}
-                        <span className="text-sm text-gray-700">{member.nutritionist?.name || "Not assigned"}</span>
-                        {/* Status */}
-                        <Badge variant="default" className="bg-green-600">Active</Badge>
-                        {/* Eye Icon */}
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          title="View member info"
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleViewMemberProfile(member);
-                          }}
-                        >
-                          <Eye className="h-5 w-5" />
-                        </Button>
-                        {/* Assign Button */}
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          title="Add trainer/nutritionist"
-                          onClick={e => {
-                            e.stopPropagation();
-                            handleAssignTrainerNutritionist(member);
-                          }}
-                        >
-                          <UserPlus className="h-5 w-5" />
-                        </Button>
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
                 {members.length > 4 && visibleMembersCount < members.length && (
-                  <div className="flex justify-center mt-6">
-                    <Button variant="outline" onClick={handleLoadMoreMembers}>
+                  <div className="flex justify-center mt-4 sm:mt-6">
+                    <Button variant="outline" onClick={handleLoadMoreMembers} className="text-sm sm:text-base">
                       Load More Members
                     </Button>
                   </div>
@@ -323,14 +328,14 @@ export default function AdminDashboard() {
           <TabsContent value="trainers" className="space-y-4">
             <Card className="animate-slide-up">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle>Trainers Overview</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Trainers Overview</CardTitle>
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button size="sm">+ Add Trainer</Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="w-full max-w-full sm:max-w-md">
                     <DialogHeader>
-                      <DialogTitle>Create New Trainer</DialogTitle>
+                      <DialogTitle className="text-base sm:text-lg">Create New Trainer</DialogTitle>
                     </DialogHeader>
                     <CreateUserForm role="trainer" onSuccess={fetchUsers} />
                   </DialogContent>
@@ -339,22 +344,22 @@ export default function AdminDashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {trainers.length === 0 ? (
-                    <p className="text-gray-500">No trainers found.</p>
+                    <p className="text-sm sm:text-base text-gray-500">No trainers found.</p>
                   ) : (
                     trainers.map((trainer, index) => (
                       <div
                         key={trainer.id}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        className="flex flex-col sm:flex-row items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                         style={{ animationDelay: `${index * 0.1}s` }}
                       >
-                        <div className="flex items-center space-x-4">
-                          <Avatar className="h-12 w-12">
+                        <div className="flex items-center space-x-3 sm:space-x-4 w-full sm:w-auto">
+                          <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
                             <AvatarImage src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
-                            <AvatarFallback>{trainer.name?.substring(0, 2) || 'T'}</AvatarFallback>
+                            <AvatarFallback className="text-sm">{trainer.name?.substring(0, 2) || 'T'}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <h3 className="font-semibold text-black">{trainer.name || "—"}</h3>
-                            <div className="flex items-center space-x-4 text-sm text-gray-600">
+                            <h3 className="font-semibold text-black text-sm sm:text-base">{trainer.name || "—"}</h3>
+                            <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm text-gray-600">
                               <div className="flex items-center space-x-1">
                                 <Mail className="h-3 w-3" />
                                 <span>{trainer.email}</span>
@@ -362,32 +367,32 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-6 text-black">
+                        <div className="flex flex-wrap items-center justify-center sm:justify-end space-x-2 sm:space-x-6 text-black mt-3 sm:mt-0">
                           <div className="text-center">
-                            <div className="flex items-center space-x-1 text-sm">
+                            <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
                               <Users className="h-3 w-3" />
                               <span className="font-medium">18</span>
                             </div>
                             <p className="text-xs text-gray-600">Clients</p>
                           </div>
                           <div className="text-center">
-                            <div className="flex items-center space-x-1 text-sm">
+                            <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
                               <Star className="h-3 w-3 text-yellow-500" />
                               <span className="font-medium">4.8</span>
                             </div>
                             <p className="text-xs text-gray-600">Rating</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-sm font-medium">5 years</p>
+                            <p className="text-xs sm:text-sm font-medium">5 years</p>
                             <p className="text-xs text-gray-600">Experience</p>
                           </div>
-                          <div className="text-right">
-                            <Badge variant="default" className="bg-green-600">Active</Badge>
-                            <p className="text-sm text-gray-600">
+                          <div className="text-center sm:text-right">
+                            <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">Active</Badge>
+                            <p className="text-xs sm:text-sm text-gray-600">
                               Joined: {trainer.created_at ? new Date(trainer.created_at).toLocaleDateString() : "—"}
                             </p>
                           </div>
-                          <Button variant="outline" size="icon">
+                          <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </div>
@@ -402,14 +407,14 @@ export default function AdminDashboard() {
           <TabsContent value="nutritionists" className="space-y-4">
             <Card className="animate-slide-up">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle>Nutritionists Overview</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Nutritionists Overview</CardTitle>
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button size="sm">+ Add Nutritionist</Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="w-full max-w-full sm:max-w-md">
                     <DialogHeader>
-                      <DialogTitle>Create New Nutritionist</DialogTitle>
+                      <DialogTitle className="text-base sm:text-lg">Create New Nutritionist</DialogTitle>
                     </DialogHeader>
                     <CreateUserForm role="nutritionist" onSuccess={fetchUsers} />
                   </DialogContent>
@@ -418,22 +423,22 @@ export default function AdminDashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {nutritionists.length === 0 ? (
-                    <p className="text-gray-500">No nutritionists found.</p>
+                    <p className="text-sm sm:text-base text-gray-500">No nutritionists found.</p>
                   ) : (
                     nutritionists.map((nutritionist, index) => (
                       <div
                         key={nutritionist.id}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                        className="flex flex-col sm:flex-row items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                         style={{ animationDelay: `${index * 0.1}s` }}
                       >
-                        <div className="flex items-center space-x-4">
-                          <Avatar className="h-12 w-12">
+                        <div className="flex items-center space-x-3 sm:space-x-4 w-full sm:w-auto">
+                          <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
                             <AvatarImage src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
-                            <AvatarFallback>{nutritionist.name?.substring(0, 2) || 'N'}</AvatarFallback>
+                            <AvatarFallback className="text-sm">{nutritionist.name?.substring(0, 2) || 'N'}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <h3 className="font-semibold text-black">{nutritionist.name || "—"}</h3>
-                            <div className="flex items-center space-x-4 text-sm text-gray-600">
+                            <h3 className="font-semibold text-black text-sm sm:text-base">{nutritionist.name || "—"}</h3>
+                            <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm text-gray-600">
                               <div className="flex items-center space-x-1">
                                 <Mail className="h-3 w-3" />
                                 <span>{nutritionist.email}</span>
@@ -441,32 +446,32 @@ export default function AdminDashboard() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center space-x-6 text-black">
+                        <div className="flex flex-wrap items-center justify-center sm:justify-end space-x-2 sm:space-x-6 text-black mt-3 sm:mt-0">
                           <div className="text-center">
-                            <div className="flex items-center space-x-1 text-sm">
+                            <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
                               <Users className="h-3 w-3" />
                               <span className="font-medium">15</span>
                             </div>
                             <p className="text-xs text-gray-600">Clients</p>
                           </div>
                           <div className="text-center">
-                            <div className="flex items-center space-x-1 text-sm">
+                            <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
                               <Star className="h-3 w-3 text-yellow-500" />
                               <span className="font-medium">4.9</span>
                             </div>
                             <p className="text-xs text-gray-600">Rating</p>
                           </div>
                           <div className="text-center">
-                            <p className="text-sm font-medium">4 years</p>
+                            <p className="text-xs sm:text-sm font-medium">4 years</p>
                             <p className="text-xs text-gray-600">Experience</p>
                           </div>
-                          <div className="text-right">
-                            <Badge variant="default" className="bg-green-600">Active</Badge>
-                            <p className="text-sm text-gray-600">
+                          <div className="text-center sm:text-right">
+                            <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">Active</Badge>
+                            <p className="text-xs sm:text-sm text-gray-600">
                               Joined: {nutritionist.created_at ? new Date(nutritionist.created_at).toLocaleDateString() : "—"}
                             </p>
                           </div>
-                          <Button variant="outline" size="icon">
+                          <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </div>
@@ -482,9 +487,9 @@ export default function AdminDashboard() {
 
       {/* Member Profile Modal */}
       <Dialog open={!!selectedMember} onOpenChange={() => setSelectedMember(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-full max-w-full sm:max-w-lg md:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Member Profile - {selectedMember?.name || selectedMember?.email}</DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">Member Profile - {selectedMember?.name || selectedMember?.email}</DialogTitle>
           </DialogHeader>
           {selectedMember && <MemberProfileView member={selectedMember} />}
         </DialogContent>
@@ -492,9 +497,9 @@ export default function AdminDashboard() {
 
       {/* Assign Trainer/Nutritionist Modal */}
       <Dialog open={!!assignmentMember} onOpenChange={() => setAssignmentMember(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-full max-w-full sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Assign Trainer & Nutritionist</DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">Assign Trainer & Nutritionist</DialogTitle>
           </DialogHeader>
           {assignmentMember && (
             <AssignmentForm
@@ -527,88 +532,86 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
   const [selectedNutritionist, setSelectedNutritionist] = useState<string>("");
 
   async function handleSubmit(e: React.FormEvent) {
-  e.preventDefault();
-  setLoading(true);
+    e.preventDefault();
+    setLoading(true);
 
-  const formData = new FormData(e.currentTarget as HTMLFormElement);
-  const body = Object.fromEntries(formData.entries());
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const body = Object.fromEntries(formData.entries());
 
-  try {
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session?.access_token) {
-      alert("Session expired. Please log in again.");
-      return;
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) {
+        alert("Session expired. Please log in again.");
+        return;
+      }
+
+      // Step 1: create user in API
+      const res = await fetch("/api/users/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: body.email,
+          password: body.password,
+          name: body.name || null,
+          role,
+          height_cm: body.height_cm || null,
+          weight_kg: body.weight_kg || null,
+          plan: body.plan || null,
+          dob: body.dob || null,
+          gender: body.gender || null,
+          trainer_id: selectedTrainer && selectedTrainer !== "none" ? selectedTrainer : null,
+          nutritionist_id: selectedNutritionist && selectedNutritionist !== "none" ? selectedNutritionist : null,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        alert(`Failed to create user: ${errorData.error || "Unknown error"}`);
+        return;
+      }
+
+      alert(`${role} created successfully!`);
+      onSuccess?.();
+    } catch (err: any) {
+      alert(`Failed to create user: ${err.message || "Unexpected error"}`);
+    } finally {
+      setLoading(false);
     }
-
-    // Step 1: create user in API
-    const res = await fetch("/api/users/create", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        email: body.email,
-        password: body.password,
-        name: body.name || null,
-        role,
-        height_cm: body.height_cm || null,
-        weight_kg: body.weight_kg || null,
-        plan: body.plan || null,
-        dob: body.dob || null,
-        gender: body.gender || null,
-        
-        trainer_id: selectedTrainer && selectedTrainer !== "none" ? selectedTrainer : null,
-        nutritionist_id: selectedNutritionist && selectedNutritionist !== "none" ? selectedNutritionist : null,
-      }),
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json();
-      alert(`Failed to create user: ${errorData.error || "Unknown error"}`);
-      return;
-    }
-
-    alert(`${role} created successfully!`);
-    onSuccess?.();
-  } catch (err: any) {
-    alert(`Failed to create user: ${err.message || "Unexpected error"}`);
-  } finally {
-    setLoading(false);
   }
-}
-
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
         {/* Column 1 */}
         <div className="space-y-4">
           <div>
-            <Label htmlFor="name">Name (Optional)</Label>
-            <Input name="name" placeholder="Full Name" />
+            <Label htmlFor="name" className="text-sm sm:text-base">Name (Optional)</Label>
+            <Input name="name" placeholder="Full Name" className="text-sm sm:text-base" />
           </div>
           <div>
-            <Label htmlFor="email">Email *</Label>
-            <Input type="email" name="email" placeholder="you@example.com" required />
+            <Label htmlFor="email" className="text-sm sm:text-base">Email *</Label>
+            <Input type="email" name="email" placeholder="you@example.com" required className="text-sm sm:text-base" />
           </div>
           <div>
-            <Label htmlFor="password">Password *</Label>
-            <Input type="password" name="password" placeholder="••••••••" required />
+            <Label htmlFor="password" className="text-sm sm:text-base">Password *</Label>
+            <Input type="password" name="password" placeholder="••••••••" required className="text-sm sm:text-base" />
           </div>
           {role === "member" && (
             <>
               <div>
-                <Label htmlFor="phone">Phone (Optional)</Label>
-                <Input name="phone" placeholder="Phone Number" />
+                <Label htmlFor="phone" className="text-sm sm:text-base">Phone (Optional)</Label>
+                <Input name="phone" placeholder="Phone Number" className="text-sm sm:text-base" />
               </div>
               <div>
-                <Label htmlFor="height_cm">Height (cm)</Label>
-                <Input type="number" name="height_cm" id="height_cm" className="input" />
+                <Label htmlFor="height_cm" className="text-sm sm:text-base">Height (cm)</Label>
+                <Input type="number" name="height_cm" id="height_cm" className="input text-sm sm:text-base" />
               </div>
               <div>
-                <Label htmlFor="weight_kg">Weight (kg)</Label>
-                <Input type="number" name="weight_kg" id="weight_kg" className="input" />
+                <Label htmlFor="weight_kg" className="text-sm sm:text-base">Weight (kg)</Label>
+                <Input type="number" name="weight_kg" id="weight_kg" className="input text-sm sm:text-base" />
               </div>
             </>
           )}
@@ -618,11 +621,11 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
           {role === "member" && (
             <>
               <div>
-                <Label htmlFor="plan">Plan</Label>
+                <Label htmlFor="plan" className="text-sm sm:text-base">Plan</Label>
                 <select
                   name="plan"
                   id="plan"
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-sm sm:text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm"
                 >
                   <option value="">Select Plan</option>
                   <option value="yearly">Yearly</option>
@@ -631,15 +634,15 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
                 </select>
               </div>
               <div>
-                <Label htmlFor="dob">Date of Birth</Label>
-                <Input type="date" name="dob" id="dob" className="input" />
+                <Label htmlFor="dob" className="text-sm sm:text-base">Date of Birth</Label>
+                <Input type="date" name="dob" id="dob" className="input text-sm sm:text-base" />
               </div>
               <div>
-                <Label htmlFor="gender">Gender</Label>
+                <Label htmlFor="gender" className="text-sm sm:text-base">Gender</Label>
                 <select
                   name="gender"
                   id="gender"
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm"
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-sm sm:text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm"
                 >
                   <option value="">Select Gender</option>
                   <option value="male">Male</option>
@@ -648,9 +651,9 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
                 </select>
               </div>
               <div>
-                <Label>Assign Trainer</Label>
+                <Label className="text-sm sm:text-base">Assign Trainer</Label>
                 <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
-                  <SelectTrigger>
+                  <SelectTrigger className="text-sm sm:text-base">
                     <SelectValue placeholder="Select a trainer (optional)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -664,9 +667,9 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
                 </Select>
               </div>
               <div>
-                <Label>Assign Nutritionist</Label>
+                <Label className="text-sm sm:text-base">Assign Nutritionist</Label>
                 <Select value={selectedNutritionist} onValueChange={setSelectedNutritionist}>
-                  <SelectTrigger>
+                  <SelectTrigger className="text-sm sm:text-base">
                     <SelectValue placeholder="Select a nutritionist (optional)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -683,34 +686,33 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
           )}
         </div>
       </div>
-      <Button type="submit" className="w-full" disabled={loading}>
+      <Button type="submit" className="w-full text-sm sm:text-base" disabled={loading}>
         {loading ? `Creating ${role}...` : `Create ${role}`}
       </Button>
     </form>
   );
 }
 
-
 /* ------------------- Member Profile View ------------------- */
 function MemberProfileView({ member }: { member: User }) {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center space-x-4">
-        <Avatar className="h-20 w-20">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-center space-x-0 sm:space-x-4 space-y-3 sm:space-y-0">
+        <Avatar className="h-16 w-16 sm:h-20 sm:w-20">
           <AvatarImage src={`https://images.pexels.com/photos/1200000/pexels-photo-1200000.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
-          <AvatarFallback className="text-lg">{member.name?.substring(0, 2) || 'M'}</AvatarFallback>
+          <AvatarFallback className="text-base sm:text-lg">{member.name?.substring(0, 2) || 'M'}</AvatarFallback>
         </Avatar>
-        <div>
-          <h2 className="text-2xl font-bold">{member.name || "Name not provided"}</h2>
-          <p className="text-gray-600">{member.email}</p>
-          <Badge className="mt-1 bg-green-600">Active Member</Badge>
+        <div className="text-center sm:text-left">
+          <h2 className="text-xl sm:text-2xl font-bold">{member.name || "Name not provided"}</h2>
+          <p className="text-sm sm:text-base text-gray-600">{member.email}</p>
+          <Badge className="mt-1 bg-green-600 text-xs sm:text-sm">Active Member</Badge>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
         <div>
-          <h3 className="font-semibold mb-3 text-lg">Personal Information</h3>
-          <div className="space-y-2 text-sm">
+          <h3 className="font-semibold mb-2 sm:mb-3 text-base sm:text-lg">Personal Information</h3>
+          <div className="space-y-2 text-xs sm:text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600">Phone:</span>
               <span>{member.profile?.phone || "Not provided"}</span>
@@ -731,11 +733,11 @@ function MemberProfileView({ member }: { member: User }) {
         </div>
 
         <div>
-          <h3 className="font-semibold mb-3 text-lg">Physical Stats</h3>
-          <div className="space-y-2 text-sm">
+          <h3 className="font-semibold mb-2 sm:mb-3 text-base sm:text-lg">Physical Stats</h3>
+          <div className="space-y-2 text-xs sm:text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600">Height:</span>
-              <span>{member.profile?.height_cm  ? `${member.profile?.height_cm } cm` : "Not provided"}</span>
+              <span>{member.profile?.height_cm ? `${member.profile?.height_cm} cm` : "Not provided"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Weight:</span>
@@ -754,60 +756,56 @@ function MemberProfileView({ member }: { member: User }) {
       </div>
 
       <div>
-        <h3 className="font-semibold mb-3 text-lg">Assigned Staff</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 border rounded-lg">
-            <h4 className="font-medium mb-2 flex items-center">
+        <h3 className="font-semibold mb-2 sm:mb-3 text-base sm:text-lg">Assigned Staff</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <div className="p-3 sm:p-4 border rounded-lg">
+            <h4 className="font-medium mb-2 flex items-center text-sm sm:text-base">
               <UserCheck className="h-4 w-4 mr-2" />
               Trainer
             </h4>
             {member.trainer ? (
               <div className="flex items-center space-x-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback className="text-xs">
-                    {member.trainer.name?.substring(0, 2) || 'T'}
-                  </AvatarFallback>
+                  <AvatarFallback className="text-xs">{member.trainer.name?.substring(0, 2) || 'T'}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-medium text-sm">{member.trainer.name || "Unnamed Trainer"}</p>
+                  <p className="font-medium text-xs sm:text-sm">{member.trainer.name || "Unnamed Trainer"}</p>
                   <p className="text-xs text-gray-600">{member.trainer.email}</p>
                 </div>
               </div>
             ) : (
-              <p className="text-gray-500 text-sm">No trainer assigned</p>
+              <p className="text-xs sm:text-sm text-gray-500">No trainer assigned</p>
             )}
           </div>
 
-          <div className="p-4 border rounded-lg">
-            <h4 className="font-medium mb-2 flex items-center">
+          <div className="p-3 sm:p-5 border rounded-lg">
+            <h4 className="font-medium mb-2 flex items-center text-sm sm:text-base">
               <Utensils className="h-4 w-4 mr-2" />
               Nutritionist
             </h4>
             {member.nutritionist ? (
               <div className="flex items-center space-x-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback className="text-xs">
-                    {member.nutritionist.name?.substring(0, 2) || 'N'}
-                  </AvatarFallback>
+                  <AvatarFallback className="text-xs">{member.nutritionist.name?.substring(0, 2) || 'N'}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-medium text-sm">{member.nutritionist.name || "Unnamed Nutritionist"}</p>
+                  <p className="font-medium text-xs sm:text-sm">{member.nutritionist.name || "Unnamed Nutritionist"}</p>
                   <p className="text-xs text-gray-600">{member.nutritionist.email}</p>
                 </div>
               </div>
             ) : (
-              <p className="text-gray-500 text-sm">No nutritionist assigned</p>
+              <p className="text-xs sm:text-sm text-gray-500">No nutritionist assigned</p>
             )}
           </div>
         </div>
       </div>
 
-      <div className="flex justify-end space-x-2 pt-4 border-t">
-        <Button variant="outline" size="sm">
+      <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-3 sm:pt-4 border-t">
+        <Button variant="outline" size="sm" className="text-xs sm:text-sm">
           <Edit3 className="h-4 w-4 mr-2" />
           Edit Profile
         </Button>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" className="text-xs sm:text-sm">
           Send Message
         </Button>
       </div>
@@ -849,7 +847,7 @@ function AssignmentForm({
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          member_id: member.id,   // must always be a real uuid
+          member_id: member.id,
           trainer_id: selectedTrainer && selectedTrainer !== "none" ? selectedTrainer : null,
           nutritionist_id: selectedNutritionist && selectedNutritionist !== "none" ? selectedNutritionist : null,
         }),
@@ -872,14 +870,14 @@ function AssignmentForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="mb-4">
-        <h4 className="font-medium mb-2">Member: {member.name || member.email}</h4>
-        <p className="text-sm text-gray-600">Update trainer and nutritionist assignments</p>
+        <h4 className="font-medium mb-2 text-sm sm:text-base">Member: {member.name || member.email}</h4>
+        <p className="text-xs sm:text-sm text-gray-600">Update trainer and nutritionist assignments</p>
       </div>
 
       <div>
-        <Label>Assign Trainer</Label>
+        <Label className="text-sm sm:text-base">Assign Trainer</Label>
         <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
-          <SelectTrigger>
+          <SelectTrigger className="text-sm sm:text-base">
             <SelectValue placeholder="Select a trainer" />
           </SelectTrigger>
           <SelectContent>
@@ -894,9 +892,9 @@ function AssignmentForm({
       </div>
 
       <div>
-        <Label>Assign Nutritionist</Label>
+        <Label className="text-sm sm:text-base">Assign Nutritionist</Label>
         <Select value={selectedNutritionist} onValueChange={setSelectedNutritionist}>
-          <SelectTrigger>
+          <SelectTrigger className="text-sm sm:text-base">
             <SelectValue placeholder="Select a nutritionist" />
           </SelectTrigger>
           <SelectContent>
@@ -910,11 +908,10 @@ function AssignmentForm({
         </Select>
       </div>
 
-      <div className="flex justify-end space-x-2 pt-4">
-        <Button type="submit" disabled={loading}>
-  {loading ? "Updating..." : "Update Assignments"}
-</Button>
-
+      <div className="flex justify-end space-x-2 pt-3 sm:pt-4">
+        <Button type="submit" disabled={loading} className="text-sm sm:text-base">
+          {loading ? "Updating..." : "Update Assignments"}
+        </Button>
       </div>
     </form>
   );
