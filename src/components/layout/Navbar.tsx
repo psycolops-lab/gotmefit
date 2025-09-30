@@ -105,7 +105,7 @@ export default function Navbar() {
     const role = profile?.role;
     if (role === "superadmin") return router.push("/superadmin/dashboard");
     if (role === "admin") return router.push("/admin/dashboard");
-    if (role === "member") return router.push("/member/dashboard");
+    if (role === "member") return router.push(`/member/${user.id}`);
     if (role === "trainer") return router.push("/trainer/dashboard");
     if (role === "nutritionist") return router.push("/nutritionist/dashboard");
 
@@ -173,7 +173,7 @@ export default function Navbar() {
                     className="text-red-600"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
-                    Sign Out
+                    Log Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>

@@ -35,7 +35,6 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import toast, { Toaster } from "react-hot-toast";
-import SelectAndSort from "@/components/SearchAndSort";
 type DietPlan = {
   id: string;
   user_email: string;
@@ -407,20 +406,7 @@ export default function NutritionistDashboardPage() {
         </div>
         <Button onClick={loadMembers} variant="outline">Refresh</Button>
       </div>
-      <SelectAndSort
-      id="members-sort"
-    data={memoizedMembers}
-    searchField="name"
-    sortField="created_at"
-    onDataChange={(sortedMembers) => {
-      // Only update if the data has changed
-      if (JSON.stringify(sortedMembers) !== JSON.stringify(members)) {
-        setMembers([...sortedMembers]);
-      }
-    }}
-    placeholder="Search members by name..."
-    className="mb-6"
-  />
+      
 
       {error && (
         <motion.div

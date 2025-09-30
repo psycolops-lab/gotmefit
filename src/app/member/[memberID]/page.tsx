@@ -605,7 +605,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useParams, useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import PlanExpirationReminder from "@/components/PlanExpirationReminder";
 
 type MemberProfile = {
   user_id: string;
@@ -1470,13 +1470,15 @@ export default function MemberDashboardPage() {
               <CardTitle className="flex items-center pt-1"><Target className="mr-2" /> Plan</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground">Selected plan</div>
+              <div className="text-sm text-muted-foreground ">Selected plan</div>
+              <PlanExpirationReminder plan={profile?.plan} planStart={profile?.plan_start} />
               <div className="mt-2 font-semibold text-lg">{profile?.plan ?? "No plan assigned"}</div>
               {profile?.plan_start && (
                 <Badge variant="secondary" className="mt-2">
                   Started: {new Date(profile.plan_start).toLocaleDateString()}
                 </Badge>
               )}
+              
             </CardContent>
           </Card>
         </motion.div>
@@ -1516,21 +1518,63 @@ export default function MemberDashboardPage() {
         </motion.div>
 
         <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }}>
-          <Card className="shadow-lg rounded-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-red-200 to-red-300">
-              <CardTitle className="flex items-center"><Ruler className="mr-2" /> BMI</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="text-sm text-muted-foreground mt-1">BMI</div>
-              <div className="flex justify-between items-center text-sm mt-2">
-                <div className="font-semibold text-lg">{profile?.bmi ?? "—"}</div>
-                <div className="text-xs text-muted-foreground items-center flex">
-                  <Activity className="mr-1" size={14} /> {profile?.activity_level ?? "—"}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+  <Card className="shadow-lg rounded-xl overflow-hidden">
+    <CardHeader className="bg-gradient-to-r from-red-200 to-red-300">
+      <CardTitle className="flex items-center"><Ruler className="mr-2" /> BMI</CardTitle>
+    </CardHeader>
+    <CardContent className="pt-4">
+      <div className="text-sm text-muted-foreground mt-1">BMI</div>
+
+      <div className="flex justify-between items-center text-sm mt-2">
+        <div className="flex items-center space-x-3">
+          {/* BMI value */}
+          <div className="font-semibold text-lg">
+            {profile?.bmi != null && !Number.isNaN(Number(profile.bmi))
+              ? Number(profile.bmi).toFixed(1)
+              : "—"}
+          </div>
+
+          {/* Category badge (only when BMI is valid) */}
+          {profile?.bmi != null && !Number.isNaN(Number(profile.bmi)) && (
+            (() => {
+              const bmi = Number(profile.bmi);
+              let label = "—";
+              let colorClass = "bg-gray-100 text-gray-800";
+
+              if (bmi < 18.5) {
+                label = "Underweight";
+                colorClass = "bg-yellow-100 text-yellow-800";
+              } else if (bmi < 25) {
+                label = "Healthy weight";
+                colorClass = "bg-green-100 text-green-800";
+              } else if (bmi < 30) {
+                label = "Overweight";
+                colorClass = "bg-orange-100 text-orange-800";
+              } else {
+                label = "Obesity";
+                colorClass = "bg-red-100 text-red-800";
+              }
+
+              return (
+                <span
+                  aria-label={`BMI category: ${label}`}
+                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${colorClass}`}
+                >
+                  {label}
+                </span>
+              );
+            })()
+          )}
+        </div>
+
+        <div className="text-xs text-muted-foreground items-center flex">
+          <Activity className="mr-1" size={14} /> {profile?.activity_level ?? "—"}
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+</motion.div>
+
       </div>
 
       {/* <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>

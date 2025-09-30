@@ -1,8 +1,7 @@
 
-// src/app/admin/dashboard/page.tsx
 "use client";
-
-import { useEffect, useState, useMemo } from "react";
+import PlanExpirationReminder from "@/components/PlanExpirationReminder";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -45,7 +44,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
-import SelectAndSort from "@/components/SearchAndSort";
+import SearchAndSort from "@/components/SearchAndSort";
+import { Toaster, toast } from "react-hot-toast";
 
 interface User {
   id: string;
@@ -82,9 +82,9 @@ export default function AdminDashboard() {
     totalNutritionists: 0,
     monthlyRevenue: 0,
   });
-  const memoizedMembers = useMemo(() => members, [members]);
-  const memoizedTrainers = useMemo(() => trainers, [trainers]);
-  const memoizedNutritionists = useMemo(() => nutritionists, [nutritionists]);
+  const [isMemberDialogOpen, setIsMemberDialogOpen] = useState(false);
+  const [isTrainerDialogOpen, setIsTrainerDialogOpen] = useState(false);
+  const [isNutritionistDialogOpen, setIsNutritionistDialogOpen] = useState(false);
 
   const router = useRouter();
 
@@ -101,7 +101,7 @@ export default function AdminDashboard() {
           code: sessionError?.code,
           session: session ? { userId: session.user?.id, email: session.user?.email } : null,
         });
-        alert("Session expired. Please log in again.");
+        toast.error("Session expired. Please log in again.");
         router.push("/login");
         return;
       }
@@ -137,16 +137,15 @@ export default function AdminDashboard() {
       setTrainers(trainersList);
       setNutritionists(nutritionistsList);
 
-      // Update stats dynamically
       setStats({
         totalMembers: membersList.length,
         totalTrainers: trainersList.length,
         totalNutritionists: nutritionistsList.length,
-        monthlyRevenue: 0, // Can be calculated if data available
+        monthlyRevenue: 0,
       });
     } catch (err: any) {
       console.error("Fetch users error:", err.message);
-      alert("Failed to load users. Please try again.");
+      toast.error("Failed to load users. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -166,6 +165,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen pt-16 px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
+      <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
       <div className="max-w-full sm:max-w-4xl lg:max-w-7xl mx-auto">
         <motion.h1
           className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-5"
@@ -232,7 +232,7 @@ export default function AdminDashboard() {
             <Card className="animate-slide-up">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-base sm:text-lg">Members Overview</CardTitle>
-                <Dialog>
+                <Dialog open={isMemberDialogOpen} onOpenChange={setIsMemberDialogOpen}>
                   <DialogTrigger asChild>
                     <Button size="sm">+ Add Member</Button>
                   </DialogTrigger>
@@ -240,103 +240,120 @@ export default function AdminDashboard() {
                     <DialogHeader>
                       <DialogTitle className="text-base sm:text-lg">Create New Member</DialogTitle>
                     </DialogHeader>
-                    <CreateUserForm 
-                      role="member" 
-                      trainers={trainers} 
+                    <CreateUserForm
+                      role="member"
+                      trainers={trainers}
                       nutritionists={nutritionists}
                       onSuccess={fetchUsers}
+                      onClose={() => setIsMemberDialogOpen(false)}
                     />
                   </DialogContent>
                 </Dialog>
               </CardHeader>
+
               <CardContent>
-                <SelectAndSort
-  id="members-sort"
-  data={memoizedMembers}
-  searchField="name"
-  sortField="created_at"
-  onDataChange={(sortedMembers) => setMembers(sortedMembers)}
-  placeholder="Search members by name..."
-  className="mb-4"
-/>
-                <div className="overflow-x-auto">
-                  
-                  {/* Header Row */}
-                  <div className="grid grid-cols-6 gap-2 sm:gap-4 px-1 sm:px-2 py-2 font-semibold text-gray-700 bg-gray-200 rounded-md mb-2 min-w-[600px]">
-                    <span className="text-xs sm:text-sm truncate">Member</span>
-                    <span className="text-xs sm:text-sm truncate">Trainer</span>
-                    <span className="text-xs sm:text-sm truncate">Nutritionist</span>
-                    <span className="text-xs sm:text-sm truncate">Status</span>
-                    <span className="text-xs sm:text-sm truncate"></span>
-                    <span className="text-xs sm:text-sm truncate"></span>
-                  </div>
-                  <div className="space-y-4">
-                    
-                    {members.length === 0 ? (
-                      <p className="text-sm sm:text-base text-gray-500">No members found.</p>
-                    ) : (
-                      members.slice(0, visibleMembersCount).map((member, index) => (
-                        <div
-                          key={member.id}
-                          className="grid grid-cols-6 items-center p-2 sm:p-3 dark:bg-gray-300 dark:hover:bg-gray-400 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer min-w-[600px]"
-                          style={{ animationDelay: `${index * 0.1}s` }}
-                          onClick={() => {
-                            router.push(`/member/${member.id}`);
-                          }}
-                        >
-                          {/* Profile Pic */}
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
-                              <AvatarImage src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
-                              <AvatarFallback className="text-xs sm:text-sm">{member.name?.substring(0, 2) || 'M'}</AvatarFallback>
-                            </Avatar>
-                            <span className="font-semibold text-black text-xs sm:text-sm truncate">{member.name || "—"}</span>
-                          </div>
-                          {/* Trainer Name */}
-                          <span className="text-xs sm:text-sm text-gray-700 truncate">{member.trainer?.name || "Not assigned"}</span>
-                          {/* Nutritionist Name */}
-                          <span className="text-xs sm:text-sm text-gray-700 truncate">{member.nutritionist?.name || "Not assigned"}</span>
-                          {/* Status */}
-                          <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">Active</Badge>
-                          {/* Eye Icon */}
+                <SearchAndSort
+                  id="members"
+                  data={members}
+                  searchField="name"
+                  sortField="created_at"
+                  placeholder="Search members by name..."
+                  className="mb-4"
+                  render={(filtered) => (
+                    <>
+                      <div className="overflow-x-auto">
+                        <div className="grid grid-cols-6 gap-2 sm:gap-4 px-1 sm:px-2 py-2 font-semibold text-gray-700 bg-gray-200 rounded-md mb-2 min-w-[600px]">
+                          <span className="text-xs sm:text-sm truncate">Member</span>
+                          <span className="text-xs sm:text-sm truncate">Trainer</span>
+                          <span className="text-xs sm:text-sm truncate">Nutritionist</span>
+                          <span className="text-xs sm:text-sm truncate">Status</span>
+                          <span className="text-xs sm:text-sm truncate"></span>
+                          <span className="text-xs sm:text-sm truncate"></span>
+                        </div>
+
+                        <div className="space-y-4">
+                          {filtered.length === 0 ? (
+                            <p className="text-sm sm:text-base text-gray-500">
+                              No members found.
+                            </p>
+                          ) : (
+                            filtered.slice(0, visibleMembersCount).map((member, index) => (
+                              <div
+                                key={member.id}
+                                className="grid grid-cols-6 items-center p-2 sm:p-3 dark:bg-gray-300 dark:hover:bg-gray-400 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer min-w-[600px]"
+                                style={{ animationDelay: `${index * 0.1}s` }}
+                                onClick={() => {
+                                  router.push(`/member/${member.id}`);
+                                }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
+                                    <AvatarImage
+                                      src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${
+                                        1200000 + index
+                                      }.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`}
+                                    />
+                                    <AvatarFallback className="text-xs sm:text-sm">
+                                      {member.name?.substring(0, 2) || "M"}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="font-semibold text-black text-xs sm:text-sm truncate">
+                                    {member.name || "—"}
+                                  </span>
+                                </div>
+                                <span className="text-xs sm:text-sm text-gray-700 truncate">
+                                  {member.trainer?.name || "Not assigned"}
+                                </span>
+                                <span className="text-xs sm:text-sm text-gray-700 truncate">
+                                  {member.nutritionist?.name || "Not assigned"}
+                                </span>
+                                <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">
+                                  Active
+                                </Badge>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  title="View member info"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewMemberProfile(member);
+                                  }}
+                                  className="h-7 w-7 sm:h-8 sm:w-8"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  title="Add trainer/nutritionist"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAssignTrainerNutritionist(member);
+                                  }}
+                                  className="h-7 w-7 sm:h-8 sm:w-8"
+                                >
+                                  <UserPlus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      {filtered.length > 4 && visibleMembersCount < filtered.length && (
+                        <div className="flex justify-center mt-4 sm:mt-6">
                           <Button
                             variant="outline"
-                            size="icon"
-                            title="View member info"
-                            onClick={e => {
-                              e.stopPropagation();
-                              handleViewMemberProfile(member);
-                            }}
-                            className="h-7 w-7 sm:h-8 sm:w-8"
+                            onClick={handleLoadMoreMembers}
+                            className="text-sm sm:text-base"
                           >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          {/* Assign Button */}
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            title="Add trainer/nutritionist"
-                            onClick={e => {
-                              e.stopPropagation();
-                              handleAssignTrainerNutritionist(member);
-                            }}
-                            className="h-7 w-7 sm:h-8 sm:w-8"
-                          >
-                            <UserPlus className="h-4 w-4" />
+                            Load More Members
                           </Button>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-                {members.length > 4 && visibleMembersCount < members.length && (
-                  <div className="flex justify-center mt-4 sm:mt-6">
-                    <Button variant="outline" onClick={handleLoadMoreMembers} className="text-sm sm:text-base">
-                      Load More Members
-                    </Button>
-                  </div>
-                )}
-                
+                      )}
+                    </>
+                  )}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -345,7 +362,7 @@ export default function AdminDashboard() {
             <Card className="animate-slide-up">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-base sm:text-lg">Trainers Overview</CardTitle>
-                <Dialog>
+                <Dialog open={isTrainerDialogOpen} onOpenChange={setIsTrainerDialogOpen}>
                   <DialogTrigger asChild>
                     <Button size="sm">+ Add Trainer</Button>
                   </DialogTrigger>
@@ -353,69 +370,104 @@ export default function AdminDashboard() {
                     <DialogHeader>
                       <DialogTitle className="text-base sm:text-lg">Create New Trainer</DialogTitle>
                     </DialogHeader>
-                    <CreateUserForm role="trainer" onSuccess={fetchUsers} />
+                    <CreateUserForm role="trainer" onSuccess={fetchUsers} onClose={() => setIsTrainerDialogOpen(false)} />
                   </DialogContent>
                 </Dialog>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {trainers.length === 0 ? (
-                    <p className="text-sm sm:text-base text-gray-500">No trainers found.</p>
-                  ) : (
-                    trainers.map((trainer, index) => (
-                      <div
-                        key={trainer.id}
-                        className="flex flex-col sm:flex-row items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                        style={{ animationDelay: `${index * 0.1}s` }}
-                      >
-                        <div className="flex items-center space-x-3 sm:space-x-4 w-full sm:w-auto">
-                          <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
-                            <AvatarImage src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
-                            <AvatarFallback className="text-sm">{trainer.name?.substring(0, 2) || 'T'}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h3 className="font-semibold text-black text-sm sm:text-base">{trainer.name || "—"}</h3>
-                            <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm text-gray-600">
-                              <div className="flex items-center space-x-1">
-                                <Mail className="h-3 w-3" />
-                                <span>{trainer.email}</span>
+                <SearchAndSort
+                  id="trainers"
+                  data={trainers}
+                  searchField="name"
+                  sortField="created_at"
+                  placeholder="Search trainers by name..."
+                  className="mb-4"
+                  render={(filtered) => (
+                    <div className="space-y-4">
+                      {filtered.length === 0 ? (
+                        <p className="text-sm sm:text-base text-gray-500">No trainers found.</p>
+                      ) : (
+                        filtered.map((trainer, index) => (
+                          <div
+                            key={trainer.id}
+                            className="flex flex-col sm:flex-row items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                            style={{ animationDelay: `${index * 0.1}s` }}
+                          >
+                            <div className="flex items-center space-x-3 sm:space-x-4 w-full sm:w-auto">
+                              <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
+                                <AvatarImage
+                                  src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${
+                                    1200000 + index
+                                  }.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`}
+                                />
+                                <AvatarFallback className="text-sm">
+                                  {trainer.name?.substring(0, 2) || "T"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <h3 className="font-semibold text-black text-sm sm:text-base">
+                                  {trainer.name || "—"}
+                                </h3>
+                                <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm text-gray-600">
+                                  <div className="flex items-center space-x-1">
+                                    <Mail className="h-3 w-3" />
+                                    <span>{trainer.email}</span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-center sm:justify-end space-x-2 sm:space-x-6 text-black mt-3 sm:mt-0">
-                          <div className="text-center">
-                            <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
-                              <Users className="h-3 w-3" />
-                              <span className="font-medium">18</span>
+
+                            <div className="flex flex-wrap items-center justify-center sm:justify-end space-x-2 sm:space-x-6 text-black mt-3 sm:mt-0">
+                              <div className="text-center">
+                                <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
+                                  <Users className="h-3 w-3" />
+                                  <span className="font-medium">18</span>
+                                </div>
+                                <p className="text-xs text-gray-600">Clients</p>
+                              </div>
+
+                              <div className="text-center">
+                                <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
+                                  <Star className="h-3 w-3 text-yellow-500" />
+                                  <span className="font-medium">4.8</span>
+                                </div>
+                                <p className="text-xs text-gray-600">Rating</p>
+                              </div>
+
+                              <div className="text-center">
+                                <p className="text-xs sm:text-sm font-medium">5 years</p>
+                                <p className="text-xs text-gray-600">Experience</p>
+                              </div>
+
+                              <div className="text-center sm:text-right">
+                                <Badge
+                                  variant="default"
+                                  className="bg-green-600 text-xs sm:text-sm"
+                                >
+                                  Active
+                                </Badge>
+                                <p className="text-xs sm:text-sm text-gray-600">
+                                  Joined:{" "}
+                                  {trainer.created_at
+                                    ? new Date(trainer.created_at).toLocaleDateString()
+                                    : "—"}
+                                </p>
+                              </div>
+
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 sm:h-9 sm:w-9"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
                             </div>
-                            <p className="text-xs text-gray-600">Clients</p>
                           </div>
-                          <div className="text-center">
-                            <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
-                              <Star className="h-3 w-3 text-yellow-500" />
-                              <span className="font-medium">4.8</span>
-                            </div>
-                            <p className="text-xs text-gray-600">Rating</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs sm:text-sm font-medium">5 years</p>
-                            <p className="text-xs text-gray-600">Experience</p>
-                          </div>
-                          <div className="text-center sm:text-right">
-                            <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">Active</Badge>
-                            <p className="text-xs sm:text-sm text-gray-600">
-                              Joined: {trainer.created_at ? new Date(trainer.created_at).toLocaleDateString() : "—"}
-                            </p>
-                          </div>
-                          <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))
+                        ))
+                      )}
+                    </div>
                   )}
-                </div>
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -424,7 +476,7 @@ export default function AdminDashboard() {
             <Card className="animate-slide-up">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-base sm:text-lg">Nutritionists Overview</CardTitle>
-                <Dialog>
+                <Dialog open={isNutritionistDialogOpen} onOpenChange={setIsNutritionistDialogOpen}>
                   <DialogTrigger asChild>
                     <Button size="sm">+ Add Nutritionist</Button>
                   </DialogTrigger>
@@ -432,76 +484,110 @@ export default function AdminDashboard() {
                     <DialogHeader>
                       <DialogTitle className="text-base sm:text-lg">Create New Nutritionist</DialogTitle>
                     </DialogHeader>
-                    <CreateUserForm role="nutritionist" onSuccess={fetchUsers} />
+                    <CreateUserForm role="nutritionist" onSuccess={fetchUsers} onClose={() => setIsNutritionistDialogOpen(false)} />
                   </DialogContent>
                 </Dialog>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {nutritionists.length === 0 ? (
-                    <p className="text-sm sm:text-base text-gray-500">No nutritionists found.</p>
-                  ) : (
-                    nutritionists.map((nutritionist, index) => (
-                      <div
-                        key={nutritionist.id}
-                        className="flex flex-col sm:flex-row items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                        style={{ animationDelay: `${index * 0.1}s` }}
-                      >
-                        <div className="flex items-center space-x-3 sm:space-x-4 w-full sm:w-auto">
-                          <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
-                            <AvatarImage src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
-                            <AvatarFallback className="text-sm">{nutritionist.name?.substring(0, 2) || 'N'}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h3 className="font-semibold text-black text-sm sm:text-base">{nutritionist.name || "—"}</h3>
-                            <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm text-gray-600">
-                              <div className="flex items-center space-x-1">
-                                <Mail className="h-3 w-3" />
-                                <span>{nutritionist.email}</span>
+                <SearchAndSort
+                  id="nutritionists"
+                  data={nutritionists}
+                  searchField="name"
+                  sortField="created_at"
+                  placeholder="Search nutritionists by name..."
+                  className="mb-4"
+                  render={(filtered) => (
+                    <div className="space-y-4">
+                      {filtered.length === 0 ? (
+                        <p className="text-sm sm:text-base text-gray-500">No nutritionists found.</p>
+                      ) : (
+                        filtered.map((nutritionist, index) => (
+                          <div
+                            key={nutritionist.id}
+                            className="flex flex-col sm:flex-row items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                            style={{ animationDelay: `${index * 0.1}s` }}
+                          >
+                            <div className="flex items-center space-x-3 sm:space-x-4 w-full sm:w-auto">
+                              <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
+                                <AvatarImage
+                                  src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${
+                                    1200000 + index
+                                  }.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`}
+                                />
+                                <AvatarFallback className="text-sm">
+                                  {nutritionist.name?.substring(0, 2) || "N"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <h3 className="font-semibold text-black text-sm sm:text-base">
+                                  {nutritionist.name || "—"}
+                                </h3>
+                                <div className="flex items-center space-x-3 sm:space-x-4 text-xs sm:text-sm text-gray-600">
+                                  <div className="flex items-center space-x-1">
+                                    <Mail className="h-3 w-3" />
+                                    <span>{nutritionist.email}</span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-center sm:justify-end space-x-2 sm:space-x-6 text-black mt-3 sm:mt-0">
-                          <div className="text-center">
-                            <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
-                              <Users className="h-3 w-3" />
-                              <span className="font-medium">15</span>
+
+                            <div className="flex flex-wrap items-center justify-center sm:justify-end space-x-2 sm:space-x-6 text-black mt-3 sm:mt-0">
+                              <div className="text-center">
+                                <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
+                                  <Users className="h-3 w-3" />
+                                  <span className="font-medium">15</span>
+                                </div>
+                                <p className="text-xs text-gray-600">Clients</p>
+                              </div>
+
+                              <div className="text-center">
+                                <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
+                                  <Star className="h-3 w-3 text-yellow-500" />
+                                  <span className="font-medium">4.9</span>
+                                </div>
+                                <p className="text-xs text-gray-600">Rating</p>
+                              </div>
+
+                              <div className="text-center">
+                                <p className="text-xs sm:text-sm font-medium">4 years</p>
+                                <p className="text-xs text-gray-600">Experience</p>
+                              </div>
+
+                              <div className="text-center sm:text-right">
+                                <Badge
+                                  variant="default"
+                                  className="bg-green-600 text-xs sm:text-sm"
+                                >
+                                  Active
+                                </Badge>
+                                <p className="text-xs sm:text-sm text-gray-600">
+                                  Joined:{" "}
+                                  {nutritionist.created_at
+                                    ? new Date(nutritionist.created_at).toLocaleDateString()
+                                    : "—"}
+                                </p>
+                              </div>
+
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 sm:h-9 sm:w-9"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
                             </div>
-                            <p className="text-xs text-gray-600">Clients</p>
                           </div>
-                          <div className="text-center">
-                            <div className="flex items-center justify-center space-x-1 text-xs sm:text-sm">
-                              <Star className="h-3 w-3 text-yellow-500" />
-                              <span className="font-medium">4.9</span>
-                            </div>
-                            <p className="text-xs text-gray-600">Rating</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs sm:text-sm font-medium">4 years</p>
-                            <p className="text-xs text-gray-600">Experience</p>
-                          </div>
-                          <div className="text-center sm:text-right">
-                            <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">Active</Badge>
-                            <p className="text-xs sm:text-sm text-gray-600">
-                              Joined: {nutritionist.created_at ? new Date(nutritionist.created_at).toLocaleDateString() : "—"}
-                            </p>
-                          </div>
-                          <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))
+                        ))
+                      )}
+                    </div>
                   )}
-                </div>
+                />
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       )}
 
-      {/* Member Profile Modal */}
       <Dialog open={!!selectedMember} onOpenChange={() => setSelectedMember(null)}>
         <DialogContent className="w-full max-w-full sm:max-w-lg md:max-w-2xl">
           <DialogHeader>
@@ -511,7 +597,6 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Assign Trainer/Nutritionist Modal */}
       <Dialog open={!!assignmentMember} onOpenChange={() => setAssignmentMember(null)}>
         <DialogContent className="w-full max-w-full sm:max-w-md">
           <DialogHeader>
@@ -540,9 +625,10 @@ interface CreateUserFormProps {
   trainers?: User[];
   nutritionists?: User[];
   onSuccess?: () => void;
+  onClose?: () => void;
 }
 
-function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: CreateUserFormProps) {
+function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess, onClose }: CreateUserFormProps) {
   const [loading, setLoading] = useState(false);
   const [selectedTrainer, setSelectedTrainer] = useState<string>("");
   const [selectedNutritionist, setSelectedNutritionist] = useState<string>("");
@@ -557,11 +643,10 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
-        alert("Session expired. Please log in again.");
+        toast.error("Session expired. Please log in again.");
         return;
       }
 
-      // Step 1: create user in API
       const res = await fetch("/api/users/create", {
         method: "POST",
         headers: {
@@ -585,14 +670,15 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
 
       if (!res.ok) {
         const errorData = await res.json();
-        alert(`Failed to create user: ${errorData.error || "Unknown error"}`);
+        toast.error(`Failed to create user: ${errorData.error || "Unknown error"}`);
         return;
       }
 
-      alert(`${role} created successfully!`);
+      toast.success(`${role} created successfully!`);
       onSuccess?.();
+      onClose?.();
     } catch (err: any) {
-      alert(`Failed to create user: ${err.message || "Unexpected error"}`);
+      toast.error(`Failed to create user: ${err.message || "Unexpected error"}`);
     } finally {
       setLoading(false);
     }
@@ -601,7 +687,6 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-        {/* Column 1 */}
         <div className="space-y-4">
           <div>
             <Label htmlFor="name" className="text-sm sm:text-base">Name (Optional)</Label>
@@ -632,7 +717,6 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: 
             </>
           )}
         </div>
-        {/* Column 2 */}
         <div className="space-y-4">
           {role === "member" && (
             <>
@@ -766,6 +850,7 @@ function MemberProfileView({ member }: { member: User }) {
             <div className="flex justify-between">
               <span className="text-gray-600">Plan:</span>
               <span>{member.profile?.plan || "No plan assigned"}</span>
+              
             </div>
           </div>
         </div>
@@ -852,7 +937,7 @@ function AssignmentForm({
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
-        alert("Session expired. Please log in again.");
+        toast.error("Session expired. Please log in again.");
         return;
       }
 
@@ -870,14 +955,14 @@ function AssignmentForm({
       });
 
       if (res.ok) {
-        alert("Assignments updated successfully!");
+        toast.success("Assignments updated successfully!");
         onSuccess();
       } else {
         const errorData = await res.json();
-        alert(`Failed to update assignments: ${errorData.error || "Unknown error"}`);
+        toast.error(`Failed to update assignments: ${errorData.error || "Unknown error"}`);
       }
     } catch (err: any) {
-      alert(`Failed to update assignments: ${err.message || "Unexpected error"}`);
+      toast.error(`Failed to update assignments: ${err.message || "Unexpected error"}`);
     } finally {
       setLoading(false);
     }
