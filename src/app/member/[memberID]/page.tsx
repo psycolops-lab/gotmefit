@@ -584,6 +584,8 @@
 
 
 
+
+
 "use client";
 import { cn } from "@/lib/utils" 
 import React, { useEffect, useMemo, useState } from "react";
@@ -790,152 +792,152 @@ export default function MemberDashboardPage() {
   ];
 
   useEffect(() => {
-  let mounted = true;
+    let mounted = true;
 
-  async function load() {
-    setLoading(true);
-    setError(null);
-    try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        setError("Session expired. Please log in again.");
-        router.push("/login");
-        return;
-      }
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+          setError("Session expired. Please log in again.");
+          router.push("/login");
+          return;
+        }
 
-      const loggedInUserId = session.user.id;
-      setIsOwnProfile(memberId === loggedInUserId);
-      console.log("Session:", { userId: session?.user?.id, email: session?.user?.email, error: sessionError });
-      console.log("isOwnProfile:", memberId === loggedInUserId, { memberId, loggedInUserId });
+        const loggedInUserId = session.user.id;
+        setIsOwnProfile(memberId === loggedInUserId);
+        console.log("Session:", { userId: session?.user?.id, email: session?.user?.email, error: sessionError });
+        console.log("isOwnProfile:", memberId === loggedInUserId, { memberId, loggedInUserId });
 
-      // Fetch member profile
-      const { data: mp, error: mpErr } = await supabase
-        .from("member_profiles")
-        .select("*")
-        .eq("user_id", memberId)
-        .maybeSingle();
-      if (mpErr) throw new Error(`Profile fetch error: ${mpErr.message}`);
-
-      // Fetch weight history
-      const { data: wh, error: whErr } = await supabase
-        .from("weight_history")
-        .select("*")
-        .eq("member_id", memberId)
-        .order("recorded_at", { ascending: true });
-      if (whErr) throw new Error(`Weight history fetch error: ${whErr.message}`);
-
-      // Fetch gallery photos
-      const { data: gp, error: gpErr } = await supabase
-        .from("gallery")
-        .select("id, date, photo")
-        .eq("user_id", memberId)
-        .order("date", { ascending: false });
-      if (gpErr) throw new Error(`Gallery fetch error: ${gpErr.message}`);
-
-      // Fetch diet plan
-      const { data: dp, error: dpErr } = await supabase
-        .from("diet")
-        .select("*")
-        .eq("user_id", memberId)
-        .maybeSingle();
-      if (dpErr && dpErr.code !== "PGRST116") {
-        throw new Error(`Diet plan fetch error: ${dpErr.message}`);
-      }
-
-      let dh: DietHistory[] = [];
-      let todayHistory: { intake: { [key: string]: boolean } } | null = null;
-
-      // Only fetch diet history if a diet plan exists
-      if (dp?.id) {
-        // Fetch diet history
-        const { data: dhData, error: dhErr } = await supabase
-          .from("diet_history")
+        // Fetch member profile
+        const { data: mp, error: mpErr } = await supabase
+          .from("member_profiles")
           .select("*")
-          .eq("meal_plan_id", dp.id)
-          .order("date", { ascending: false });
-        if (dhErr) {
-          throw new Error(`Diet history fetch error: ${dhErr.message}`);
-        }
-        dh = dhData as DietHistory[];
-
-        // Fetch today's meal status
-        const today = new Date().toISOString().split("T")[0];
-        const { data: todayHistoryData, error: todayErr } = await supabase
-          .from("diet_history")
-          .select("intake")
-          .eq("meal_plan_id", dp.id)
-          .eq("date", today)
+          .eq("user_id", memberId)
           .maybeSingle();
-        if (todayErr && todayErr.code !== "PGRST116") {
-          throw new Error(`Today's history fetch error: ${todayErr.message}`);
+        if (mpErr) throw new Error(`Profile fetch error: ${mpErr.message}`);
+
+        // Fetch weight history
+        const { data: wh, error: whErr } = await supabase
+          .from("weight_history")
+          .select("*")
+          .eq("member_id", memberId)
+          .order("recorded_at", { ascending: true });
+        if (whErr) throw new Error(`Weight history fetch error: ${whErr.message}`);
+
+        // Fetch gallery photos
+        const { data: gp, error: gpErr } = await supabase
+          .from("gallery")
+          .select("id, date, photo")
+          .eq("user_id", memberId)
+          .order("date", { ascending: false });
+        if (gpErr) throw new Error(`Gallery fetch error: ${gpErr.message}`);
+
+        // Fetch diet plan
+        const { data: dp, error: dpErr } = await supabase
+          .from("diet")
+          .select("*")
+          .eq("user_id", memberId)
+          .maybeSingle();
+        if (dpErr && dpErr.code !== "PGRST116") {
+          throw new Error(`Diet plan fetch error: ${dpErr.message}`);
         }
-        todayHistory = todayHistoryData;
-      }
 
-      if (!mounted) return;
+        let dh: DietHistory[] = [];
+        let todayHistory: { intake: { [key: string]: boolean } } | null = null;
 
-      setProfile(mp ?? null);
-      setWeightHistory((wh as WeightHistory[]) ?? []);
-      setGalleryPhotos((gp as GalleryPhoto[]) ?? []);
-      setDietPlan(dp ?? null);
-      setDietHistory(dh ?? []);
-      setTodayMealStatus(todayHistory?.intake || {});
-
-      // Check upload eligibility for own profile
-      if (loggedInUserId === memberId) {
-        const latestPhoto = gp?.[0];
-        const canUpload = !latestPhoto || isAfter(new Date(), addDays(new Date(latestPhoto.date), 7));
-        setCanUploadPhoto(canUpload);
-        console.log("canUploadPhoto:", canUpload, { latestPhoto, galleryPhotosLength: gp?.length });
-      }
-
-      // Fetch trainer
-      if (mp?.assigned_trainer_id) {
-        try {
-          const res = await fetch(`/api/member/trainer?trainer_id=${mp.assigned_trainer_id}`);
-          const json = await res.json();
-          if (json.trainer_name) {
-            setTrainer({ full_name: json.trainer_name });
+        // Only fetch diet history if a diet plan exists
+        if (dp?.id) {
+          // Fetch diet history
+          const { data: dhData, error: dhErr } = await supabase
+            .from("diet_history")
+            .select("*")
+            .eq("meal_plan_id", dp.id)
+            .order("date", { ascending: false });
+          if (dhErr) {
+            throw new Error(`Diet history fetch error: ${dhErr.message}`);
           }
-        } catch (err) {
-          console.warn("Trainer fetch error:", err);
-          setTrainer(null);
-        }
-      }
+          dh = dhData as DietHistory[];
 
-      // Fetch nutritionist
-      if (mp?.assigned_nutritionist_id) {
-        try {
-          const res = await fetch(`/api/member/nutritionist?nutritionist_id=${mp.assigned_nutritionist_id}`);
-          const json = await res.json();
-          if (json.nutritionist_name) {
-            setNutritionist({ full_name: json.nutritionist_name });
+          // Fetch today's meal status
+          const today = new Date().toISOString().split("T")[0];
+          const { data: todayHistoryData, error: todayErr } = await supabase
+            .from("diet_history")
+            .select("intake")
+            .eq("meal_plan_id", dp.id)
+            .eq("date", today)
+            .maybeSingle();
+          if (todayErr && todayErr.code !== "PGRST116") {
+            throw new Error(`Today's history fetch error: ${todayErr.message}`);
           }
-        } catch (err) {
-          console.warn("Nutritionist fetch error:", err);
-          setNutritionist(null);
+          todayHistory = todayHistoryData;
         }
-      }
 
-      // Show setup modal for own profile if incomplete
-      if (loggedInUserId === memberId && (!mp?.height_cm || !mp?.weight_kg || !mp?.bmi || !mp?.gender || !mp?.goal || !mp?.activity_level)) {
-        setShowSetupModal(true);
+        if (!mounted) return;
+
+        setProfile(mp ?? null);
+        setWeightHistory((wh as WeightHistory[]) ?? []);
+        setGalleryPhotos((gp as GalleryPhoto[]) ?? []);
+        setDietPlan(dp ?? null);
+        setDietHistory(dh ?? []);
+        setTodayMealStatus(todayHistory?.intake || {});
+
+        // Check upload eligibility for own profile
+        if (loggedInUserId === memberId) {
+          const latestPhoto = gp?.[0];
+          const canUpload = !latestPhoto || isAfter(new Date(), addDays(new Date(latestPhoto.date), 7));
+          setCanUploadPhoto(canUpload);
+          console.log("canUploadPhoto:", canUpload, { latestPhoto, galleryPhotosLength: gp?.length });
+        }
+
+        // Fetch trainer
+        if (mp?.assigned_trainer_id) {
+          try {
+            const res = await fetch(`/api/member/trainer?trainer_id=${mp.assigned_trainer_id}`);
+            const json = await res.json();
+            if (json.trainer_name) {
+              setTrainer({ full_name: json.trainer_name });
+            }
+          } catch (err) {
+            console.warn("Trainer fetch error:", err);
+            setTrainer(null);
+          }
+        }
+
+        // Fetch nutritionist
+        if (mp?.assigned_nutritionist_id) {
+          try {
+            const res = await fetch(`/api/member/nutritionist?nutritionist_id=${mp.assigned_nutritionist_id}`);
+            const json = await res.json();
+            if (json.nutritionist_name) {
+              setNutritionist({ full_name: json.nutritionist_name });
+            }
+          } catch (err) {
+            console.warn("Nutritionist fetch error:", err);
+            setNutritionist(null);
+          }
+        }
+
+        // Show setup modal for own profile if incomplete
+        if (loggedInUserId === memberId && (!mp?.height_cm || !mp?.weight_kg || !mp?.bmi || !mp?.gender || !mp?.goal || !mp?.activity_level)) {
+          setShowSetupModal(true);
+        }
+      } catch (err: any) {
+        console.error("Error loading member dashboard:", err.message);
+        setError(`Failed to load dashboard data: ${err.message}`);
+        toast.error(`Failed to load dashboard data: ${err.message}`);
+      } finally {
+        if (mounted) setLoading(false);
       }
-    } catch (err: any) {
-      console.error("Error loading member dashboard:", err.message);
-      setError(`Failed to load dashboard data: ${err.message}`);
-      toast.error(`Failed to load dashboard data: ${err.message}`);
-    } finally {
-      if (mounted) setLoading(false);
     }
-  }
 
-  load();
+    load();
 
-  return () => {
-    mounted = false;
-  };
-}, [memberId, router]);
+    return () => {
+      mounted = false;
+    };
+  }, [memberId, router]);
 
   const lastWeight = useMemo(() => {
     if (weightHistory.length === 0) return null;
@@ -964,31 +966,45 @@ export default function MemberDashboardPage() {
       const { data: dp, error: dpErr } = await supabase
         .from("diet")
         .select("*")
-        .eq("user_email", session.user.email)
+        .eq("user_id", memberId)
         .maybeSingle();
       if (dpErr && dpErr.code !== "PGRST116") throw new Error(`Diet plan fetch error: ${dpErr.message}`);
 
-      const { data: dh, error: dhErr } = await supabase
-        .from("diet_history")
-        .select("*")
-        .eq("meal_plan_id", dp?.id || "")
-        .order("date", { ascending: false });
-      if (dhErr && dp) throw new Error(`Diet history fetch error: ${dhErr.message}`);
+      let dh: DietHistory[] = [];
+      let todayHistory: { intake: { [key: string]: boolean } } | null = null;
 
-      const today = new Date().toISOString().split("T")[0];
-      const { data: todayHistory, error: todayErr } = await supabase
-        .from("diet_history")
-        .select("intake")
-        .eq("meal_plan_id", dp?.id || "")
-        .eq("date", today)
-        .maybeSingle();
-      if (todayErr && todayErr.code !== "PGRST116") throw new Error(`Today's history fetch error: ${todayErr.message}`);
+      // Only fetch diet history if a diet plan exists
+      if (dp && dp.id) {
+        // Fetch diet history
+        const { data: dhData, error: dhErr } = await supabase
+          .from("diet_history")
+          .select("*")
+          .eq("meal_plan_id", dp.id)
+          .order("date", { ascending: false });
+        if (dhErr) {
+          throw new Error(`Diet history fetch error: ${dhErr.message}`);
+        }
+        dh = dhData as DietHistory[];
+
+        // Fetch today's meal status
+        const today = new Date().toISOString().split("T")[0];
+        const { data: todayHistoryData, error: todayErr } = await supabase
+          .from("diet_history")
+          .select("intake")
+          .eq("meal_plan_id", dp.id)
+          .eq("date", today)
+          .maybeSingle();
+        if (todayErr && todayErr.code !== "PGRST116") {
+          throw new Error(`Today's history fetch error: ${todayErr.message}`);
+        }
+        todayHistory = todayHistoryData;
+      }
 
       setProfile(mp ?? null);
       setWeightHistory((wh as WeightHistory[]) ?? []);
       setGalleryPhotos((gp as GalleryPhoto[]) ?? []);
       setDietPlan(dp ?? null);
-      setDietHistory((dh as DietHistory[]) ?? []);
+      setDietHistory(dh ?? []);
       setTodayMealStatus(todayHistory?.intake || {});
 
       if (mp?.assigned_trainer_id) {

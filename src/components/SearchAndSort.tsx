@@ -1,122 +1,127 @@
 
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { Search, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import equal from "fast-deep-equal";
 
-interface SearchAndSortProps<T> {
+interface SelectAndSortProps<T> {
+  id: string;
   data: T[];
-  searchFields: (keyof T)[];
-  sortFields: { key: keyof T; label: string }[];
-  onChange: (filteredAndSortedData: T[]) => void;
+  searchField: keyof T | ((item: T) => string);
+  sortField: keyof T | ((item: T) => string | number | Date);
+  onDataChange: (filteredAndSortedData: T[]) => void;
+  placeholder?: string;
   className?: string;
 }
 
-export function SearchAndSort<T>({ data, searchFields, sortFields, onChange, className }: SearchAndSortProps<T>) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortField, setSortField] = useState<keyof T | "">("");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+type SortOption = "a-z" | "z-a" | "latest" | "oldest";
 
-  // Handle search and sort
-  const filteredAndSortedData = useMemo(() => {
+export default function SelectAndSort<T>({
+  id,
+  data,
+  searchField,
+  sortField,
+  onDataChange,
+  placeholder = "Search...",
+  className,
+}: SelectAndSortProps<T>) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortOption, setSortOption] = useState<SortOption>("a-z");
+  const prevProcessedDataRef = useRef<T[] | null>(null);
+
+  // Memoize searchField and sortField
+  const memoizedSearchField = useMemo(() => searchField, [searchField]);
+  const memoizedSortField = useMemo(() => sortField, [sortField]);
+
+  // Compute filtered and sorted data
+  const processedData = useMemo(() => {
     let result = [...data];
 
-    // Filter based on search term
+    // Filter by search term
     if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
-      result = result.filter((item) =>
-        searchFields.some((field) => {
-          const value = item[field];
-          return value && typeof value === "string" && value.toLowerCase().includes(lowerSearch);
-        })
-      );
-    }
-
-    // Sort based on selected field and direction
-    if (sortField) {
-      result.sort((a, b) => {
-        const aValue = a[sortField];
-        const bValue = b[sortField];
-
-        if (aValue == null || bValue == null) return 0;
-
-        if (typeof aValue === "string" && typeof bValue === "string") {
-          return sortDirection === "asc"
-            ? aValue.localeCompare(bValue)
-            : bValue.localeCompare(aValue);
-        } else if (typeof aValue === "number" && typeof bValue === "number") {
-          return sortDirection === "asc" ? aValue - bValue : bValue - aValue;
-        } else {
-          // Convert to string for other types (e.g., dates)
-          return sortDirection === "asc"
-            ? String(aValue).localeCompare(String(bValue))
-            : String(bValue).localeCompare(String(aValue));
-        }
+      result = result.filter((item) => {
+        const fieldValue =
+          typeof memoizedSearchField === "function"
+            ? memoizedSearchField(item)
+            : String(item[memoizedSearchField]);
+        return fieldValue.toLowerCase().includes(searchTerm.toLowerCase());
       });
     }
 
+    // Sort based on selected option
+    result.sort((a, b) => {
+      const aValue =
+        typeof memoizedSortField === "function"
+          ? memoizedSortField(a)
+          : a[memoizedSortField];
+      const bValue =
+        typeof memoizedSortField === "function"
+          ? memoizedSortField(b)
+          : b[memoizedSortField];
+
+      if (sortOption === "a-z" || sortOption === "z-a") {
+        const aStr = String(aValue).toLowerCase();
+        const bStr = String(bValue).toLowerCase();
+        return sortOption === "a-z" ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+      } else if (sortOption === "latest" || sortOption === "oldest") {
+        const aDate = aValue instanceof Date ? aValue : new Date(aValue as string);
+        const bDate = bValue instanceof Date ? bValue : new Date(bValue as string);
+        return sortOption === "latest"
+          ? bDate.getTime() - aDate.getTime()
+          : aDate.getTime() - bDate.getTime();
+      }
+      return 0;
+    });
+
     return result;
-  }, [data, searchTerm, searchFields, sortField, sortDirection]);
+  }, [data, searchTerm, sortOption, memoizedSearchField, memoizedSortField]);
 
-  // Update parent component with filtered/sorted data
-  React.useEffect(() => {
-    onChange(filteredAndSortedData);
-  }, [filteredAndSortedData, onChange]);
+  // Only call onDataChange if processedData has changed deeply
+  useEffect(() => {
+    if (!equal(processedData, prevProcessedDataRef.current)) {
+      prevProcessedDataRef.current = [...processedData];
+      onDataChange([...processedData]);
+    }
+  }, [processedData, onDataChange]);
 
-  // Reset sort
-  const resetSort = () => {
-    setSortField("");
-    setSortDirection("asc");
-  };
+  // Memoize onValueChange
+  const handleSortChange = useMemo(
+    () => (value: string) => {
+      setSortOption(value as SortOption);
+    },
+    []
+  );
 
   return (
     <div className={cn("flex flex-col sm:flex-row gap-4 items-center", className)}>
       <div className="relative flex-1 w-full sm:w-auto">
-        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
-          placeholder="Search..."
+          id={`${id}-search`}
+          type="text"
+          placeholder={placeholder}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-8 w-full"
+          className="pl-10 w-full"
         />
       </div>
-      <div className="flex items-center gap-2 w-full sm:w-auto">
-        <Select
-          value={sortField as string}
-          onValueChange={(value) => setSortField(value as keyof T)}
-        >
-          <SelectTrigger className="w-full sm:w-[180px]">
+      <div className="flex items-center gap-2">
+        <ArrowUpDown className="h-4 w-4 text-gray-500" />
+        <Select value={sortOption} onValueChange={handleSortChange}>
+          <SelectTrigger id={`${id}-sort`} className="w-[140px]">
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">None</SelectItem>
-            {sortFields.map((field) => (
-              <SelectItem key={String(field.key)} value={String(field.key)}>
-                {field.label}
-              </SelectItem>
-            ))}
+            <SelectItem value="a-z">A-Z</SelectItem>
+            <SelectItem value="z-a">Z-A</SelectItem>
+            <SelectItem value="latest">Latest</SelectItem>
+            <SelectItem value="oldest">Oldest</SelectItem>
           </SelectContent>
         </Select>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
-          disabled={!sortField}
-        >
-          <ArrowUpDown className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={resetSort}
-          disabled={!sortField}
-        >
-          Reset
-        </Button>
       </div>
     </div>
   );

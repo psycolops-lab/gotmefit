@@ -1,7 +1,6 @@
-
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import {
   Table,
@@ -36,7 +35,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import toast, { Toaster } from "react-hot-toast";
-
+import SelectAndSort from "@/components/SearchAndSort";
 type DietPlan = {
   id: string;
   user_email: string;
@@ -89,6 +88,7 @@ export default function NutritionistDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [dietHistory, setDietHistory] = useState<DietHistory[]>([]);
   const [chartData, setChartData] = useState<DietChartData[]>([]);
+  const memoizedMembers = useMemo(() => members, [members]);
 
   useEffect(() => {
     loadMembers();
@@ -165,7 +165,7 @@ export default function NutritionistDashboardPage() {
         .in("user_email", userDetails?.map(u => u.email) || []);
 
       if (dietError) {
-        console.error("loadMembers: Diet error:", dietError);
+        console.error("loadMembers: diet error:", dietError);
         throw new Error(`Failed to fetch diet plans: ${dietError.message}`);
       }
 
@@ -207,22 +207,29 @@ export default function NutritionistDashboardPage() {
   }
 
   async function loadDietHistory(memberId: string) {
+    setDietHistory([]);
+    setChartData([]);
     try {
-      const { data: dietPlans, error: dietError } = await supabase
+      const { data: dietData, error: dietError } = await supabase
         .from("diet")
-        .select("id")
+        .select("*")
         .eq("user_email", members.find(m => m.user_id === memberId)?.email)
-        .single();
+        .maybeSingle();
 
-      if (dietError || !dietPlans) {
-        console.error("loadDietHistory: Diet error:", dietError);
-        throw new Error(`Failed to fetch diet plan: ${dietError?.message || "No diet plan found"}`);
+      if (dietError) {
+        console.error("loadDietHistory: diet error:", dietError);
+        throw new Error(`Failed to fetch diet plan: ${dietError.message}`);
+      }
+
+      if (!dietData) {
+        console.log("loadDietHistory: No diet plan found");
+        return;
       }
 
       const { data: history, error } = await supabase
         .from("diet_history")
         .select("*")
-        .eq("meal_plan_id", dietPlans.id)
+        .eq("meal_plan_id", dietData.id)
         .order("date", { ascending: true });
 
       if (error) {
@@ -312,7 +319,7 @@ export default function NutritionistDashboardPage() {
 
       const { data: existingDiet, error: fetchError } = await supabase
         .from("diet")
-        .select("id")
+        .select("*")
         .eq("user_email", selectedMember.email)
         .single();
 
@@ -400,6 +407,20 @@ export default function NutritionistDashboardPage() {
         </div>
         <Button onClick={loadMembers} variant="outline">Refresh</Button>
       </div>
+      <SelectAndSort
+      id="members-sort"
+    data={memoizedMembers}
+    searchField="name"
+    sortField="created_at"
+    onDataChange={(sortedMembers) => {
+      // Only update if the data has changed
+      if (JSON.stringify(sortedMembers) !== JSON.stringify(members)) {
+        setMembers([...sortedMembers]);
+      }
+    }}
+    placeholder="Search members by name..."
+    className="mb-6"
+  />
 
       {error && (
         <motion.div

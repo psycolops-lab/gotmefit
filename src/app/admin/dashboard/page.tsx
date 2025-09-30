@@ -2,7 +2,7 @@
 // src/app/admin/dashboard/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -45,6 +45,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRouter } from "next/navigation";
+import SelectAndSort from "@/components/SearchAndSort";
 
 interface User {
   id: string;
@@ -81,7 +82,10 @@ export default function AdminDashboard() {
     totalNutritionists: 0,
     monthlyRevenue: 0,
   });
-  
+  const memoizedMembers = useMemo(() => members, [members]);
+  const memoizedTrainers = useMemo(() => trainers, [trainers]);
+  const memoizedNutritionists = useMemo(() => nutritionists, [nutritionists]);
+
   const router = useRouter();
 
   useEffect(() => {
@@ -246,7 +250,17 @@ export default function AdminDashboard() {
                 </Dialog>
               </CardHeader>
               <CardContent>
+                <SelectAndSort
+  id="members-sort"
+  data={memoizedMembers}
+  searchField="name"
+  sortField="created_at"
+  onDataChange={(sortedMembers) => setMembers(sortedMembers)}
+  placeholder="Search members by name..."
+  className="mb-4"
+/>
                 <div className="overflow-x-auto">
+                  
                   {/* Header Row */}
                   <div className="grid grid-cols-6 gap-2 sm:gap-4 px-1 sm:px-2 py-2 font-semibold text-gray-700 bg-gray-200 rounded-md mb-2 min-w-[600px]">
                     <span className="text-xs sm:text-sm truncate">Member</span>
@@ -257,6 +271,7 @@ export default function AdminDashboard() {
                     <span className="text-xs sm:text-sm truncate"></span>
                   </div>
                   <div className="space-y-4">
+                    
                     {members.length === 0 ? (
                       <p className="text-sm sm:text-base text-gray-500">No members found.</p>
                     ) : (
@@ -321,6 +336,7 @@ export default function AdminDashboard() {
                     </Button>
                   </div>
                 )}
+                
               </CardContent>
             </Card>
           </TabsContent>
