@@ -1,4 +1,3 @@
-
 "use client";
 import PlanExpirationReminder from "@/components/PlanExpirationReminder";
 import { useEffect, useState } from "react";
@@ -73,7 +72,8 @@ export default function AdminDashboard() {
   const [trainers, setTrainers] = useState<User[]>([]);
   const [nutritionists, setNutritionists] = useState<User[]>([]);
   const [selectedMember, setSelectedMember] = useState<User | null>(null);
-  const [assignmentMember, setAssignmentMember] = useState<User | null>(null);
+  const [trainerAssignmentMember, setTrainerAssignmentMember] = useState<User | null>(null);
+  const [nutritionistAssignmentMember, setNutritionistAssignmentMember] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [visibleMembersCount, setVisibleMembersCount] = useState(4);
   const [stats, setStats] = useState({
@@ -159,8 +159,12 @@ export default function AdminDashboard() {
     setSelectedMember(member);
   };
 
-  const handleAssignTrainerNutritionist = (member: User) => {
-    setAssignmentMember(member);
+  const handleAssignTrainerNutritionist = (member: User, role: "trainer" | "nutritionist") => {
+    if (role === "trainer") {
+      setTrainerAssignmentMember(member);
+    } else {
+      setNutritionistAssignmentMember(member);
+    }
   };
 
   return (
@@ -322,18 +326,36 @@ export default function AdminDashboard() {
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  title="Add trainer/nutritionist"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleAssignTrainerNutritionist(member);
-                                  }}
-                                  className="h-7 w-7 sm:h-8 sm:w-8"
-                                >
-                                  <UserPlus className="h-4 w-4" />
-                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      title="Assign trainer or nutritionist"
+                                      className="h-7 w-7 sm:h-8 sm:w-8"
+                                    >
+                                      <UserPlus className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent>
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAssignTrainerNutritionist(member, "trainer");
+                                      }}
+                                    >
+                                      Assign Trainer
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAssignTrainerNutritionist(member, "nutritionist");
+                                      }}
+                                    >
+                                      Assign Nutritionist
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               </div>
                             ))
                           )}
@@ -597,19 +619,38 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!assignmentMember} onOpenChange={() => setAssignmentMember(null)}>
+      <Dialog open={!!trainerAssignmentMember} onOpenChange={() => setTrainerAssignmentMember(null)}>
         <DialogContent className="w-full max-w-full sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Assign Trainer & Nutritionist</DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">Assign Trainer</DialogTitle>
           </DialogHeader>
-          {assignmentMember && (
+          {trainerAssignmentMember && (
             <AssignmentForm
-              member={assignmentMember}
+              member={trainerAssignmentMember}
               trainers={trainers}
+              nutritionists={[]}
+              onSuccess={() => {
+                fetchUsers();
+                setTrainerAssignmentMember(null);
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!nutritionistAssignmentMember} onOpenChange={() => setNutritionistAssignmentMember(null)}>
+        <DialogContent className="w-full max-w-full sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">Assign Nutritionist</DialogTitle>
+          </DialogHeader>
+          {nutritionistAssignmentMember && (
+            <AssignmentForm
+              member={nutritionistAssignmentMember}
+              trainers={[]}
               nutritionists={nutritionists}
               onSuccess={() => {
-                setAssignmentMember(null);
                 fetchUsers();
+                setNutritionistAssignmentMember(null);
               }}
             />
           )}
@@ -850,7 +891,6 @@ function MemberProfileView({ member }: { member: User }) {
             <div className="flex justify-between">
               <span className="text-gray-600">Plan:</span>
               <span>{member.profile?.plan || "No plan assigned"}</span>
-              
             </div>
           </div>
         </div>
@@ -930,6 +970,9 @@ function AssignmentForm({
   const [selectedNutritionist, setSelectedNutritionist] = useState<string>(member.nutritionist_id || "");
   const [loading, setLoading] = useState(false);
 
+  const isTrainerForm = trainers.length > 0;
+  const isNutritionistForm = nutritionists.length > 0;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -941,28 +984,32 @@ function AssignmentForm({
         return;
       }
 
+      const body: any = { member_id: member.id };
+      if (isTrainerForm) {
+        body.trainer_id = selectedTrainer && selectedTrainer !== "none" ? selectedTrainer : null;
+      }
+      if (isNutritionistForm) {
+        body.nutritionist_id = selectedNutritionist && selectedNutritionist !== "none" ? selectedNutritionist : null;
+      }
+
       const res = await fetch(`/api/users/assign`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          member_id: member.id,
-          trainer_id: selectedTrainer && selectedTrainer !== "none" ? selectedTrainer : null,
-          nutritionist_id: selectedNutritionist && selectedNutritionist !== "none" ? selectedNutritionist : null,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (res.ok) {
-        toast.success("Assignments updated successfully!");
+        toast.success(`${isTrainerForm ? "Trainer" : "Nutritionist"} assigned successfully!`);
         onSuccess();
       } else {
         const errorData = await res.json();
-        toast.error(`Failed to update assignments: ${errorData.error || "Unknown error"}`);
+        toast.error(`Failed to update assignment: ${errorData.error || "Unknown error"}`);
       }
     } catch (err: any) {
-      toast.error(`Failed to update assignments: ${err.message || "Unexpected error"}`);
+      toast.error(`Failed to update assignment: ${err.message || "Unexpected error"}`);
     } finally {
       setLoading(false);
     }
@@ -972,46 +1019,52 @@ function AssignmentForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="mb-4">
         <h4 className="font-medium mb-2 text-sm sm:text-base">Member: {member.name || member.email}</h4>
-        <p className="text-xs sm:text-sm text-gray-600">Update trainer and nutritionist assignments</p>
+        <p className="text-xs sm:text-sm text-gray-600">
+          Update {isTrainerForm ? "trainer" : "nutritionist"} assignment
+        </p>
       </div>
 
-      <div>
-        <Label className="text-sm sm:text-base">Assign Trainer</Label>
-        <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
-          <SelectTrigger className="text-sm sm:text-base">
-            <SelectValue placeholder="Select a trainer" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No trainer</SelectItem>
-            {trainers.map((trainer) => (
-              <SelectItem key={trainer.id} value={trainer.id}>
-                {trainer.name || trainer.email}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {isTrainerForm && (
+        <div>
+          <Label className="text-sm sm:text-base">Assign Trainer</Label>
+          <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
+            <SelectTrigger className="text-sm sm:text-base">
+              <SelectValue placeholder="Select a trainer" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No trainer</SelectItem>
+              {trainers.map((trainer) => (
+                <SelectItem key={trainer.id} value={trainer.id}>
+                  {trainer.name || trainer.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
-      <div>
-        <Label className="text-sm sm:text-base">Assign Nutritionist</Label>
-        <Select value={selectedNutritionist} onValueChange={setSelectedNutritionist}>
-          <SelectTrigger className="text-sm sm:text-base">
-            <SelectValue placeholder="Select a nutritionist" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No nutritionist</SelectItem>
-            {nutritionists.map((nutritionist) => (
-              <SelectItem key={nutritionist.id} value={nutritionist.id}>
-                {nutritionist.name || nutritionist.email}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {isNutritionistForm && (
+        <div>
+          <Label className="text-sm sm:text-base">Assign Nutritionist</Label>
+          <Select value={selectedNutritionist} onValueChange={setSelectedNutritionist}>
+            <SelectTrigger className="text-sm sm:text-base">
+              <SelectValue placeholder="Select a nutritionist" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No nutritionist</SelectItem>
+              {nutritionists.map((nutritionist) => (
+                <SelectItem key={nutritionist.id} value={nutritionist.id}>
+                  {nutritionist.name || nutritionist.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       <div className="flex justify-end space-x-2 pt-3 sm:pt-4">
         <Button type="submit" disabled={loading} className="text-sm sm:text-base">
-          {loading ? "Updating..." : "Update Assignments"}
+          {loading ? "Updating..." : `Update ${isTrainerForm ? "Trainer" : "Nutritionist"}`}
         </Button>
       </div>
     </form>
