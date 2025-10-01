@@ -35,6 +35,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import toast, { Toaster } from "react-hot-toast";
+
 type DietPlan = {
   id: string;
   user_email: string;
@@ -72,6 +73,11 @@ type MealItem = {
   quantity: string;
 };
 
+type Meal = {
+  name: string;
+  items: MealItem[];
+};
+
 export default function NutritionistDashboardPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,11 +85,9 @@ export default function NutritionistDashboardPage() {
   const [showDietModal, setShowDietModal] = useState(false);
   const [showChartModal, setShowChartModal] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [newDietPlan, setNewDietPlan] = useState({
-    Meal_1: [{ name: "", quantity: "" }],
-    Meal_2: [{ name: "", quantity: "" }],
-    Meal_3: [{ name: "", quantity: "" }],
-  });
+  const [newDietPlan, setNewDietPlan] = useState<Meal[]>([
+    { name: "Meal 1", items: [{ name: "", quantity: "" }] },
+  ]);
   const [error, setError] = useState<string | null>(null);
   const [dietHistory, setDietHistory] = useState<DietHistory[]>([]);
   const [chartData, setChartData] = useState<DietChartData[]>([]);
@@ -251,40 +255,71 @@ export default function NutritionistDashboardPage() {
     }
   }
 
-  const addMealItem = (meal: keyof typeof newDietPlan) => {
-    setNewDietPlan(prev => ({
+  const addMeal = () => {
+    setNewDietPlan(prev => [
       ...prev,
-      [meal]: [...prev[meal], { name: "", quantity: "" }],
-    }));
+      { name: `Meal ${prev.length + 1}`, items: [{ name: "", quantity: "" }] },
+    ]);
   };
 
-  const updateMealItem = (meal: keyof typeof newDietPlan, index: number, field: "name" | "quantity", value: string) => {
-    setNewDietPlan(prev => ({
-      ...prev,
-      [meal]: prev[meal].map((item, i) =>
-        i === index ? { ...item, [field]: value } : item
-      ),
-    }));
+  const removeMeal = (index: number) => {
+    if (newDietPlan.length > 1) {
+      setNewDietPlan(prev => prev.filter((_, i) => i !== index));
+    }
   };
 
-  const removeMealItem = (meal: keyof typeof newDietPlan, index: number) => {
-    setNewDietPlan(prev => ({
-      ...prev,
-      [meal]: prev[meal].filter((_, i) => i !== index),
-    }));
+  const updateMealName = (index: number, name: string) => {
+    setNewDietPlan(prev =>
+      prev.map((meal, i) => (i === index ? { ...meal, name } : meal))
+    );
+  };
+
+  const addMealItem = (mealIndex: number) => {
+    setNewDietPlan(prev =>
+      prev.map((meal, i) =>
+        i === mealIndex
+          ? { ...meal, items: [...meal.items, { name: "", quantity: "" }] }
+          : meal
+      )
+    );
+  };
+
+  const updateMealItem = (mealIndex: number, itemIndex: number, field: "name" | "quantity", value: string) => {
+    setNewDietPlan(prev =>
+      prev.map((meal, i) =>
+        i === mealIndex
+          ? {
+              ...meal,
+              items: meal.items.map((item, j) =>
+                j === itemIndex ? { ...item, [field]: value } : item
+              ),
+            }
+          : meal
+      )
+    );
+  };
+
+  const removeMealItem = (mealIndex: number, itemIndex: number) => {
+    setNewDietPlan(prev =>
+      prev.map((meal, i) =>
+        i === mealIndex
+          ? { ...meal, items: meal.items.filter((_, j) => j !== itemIndex) }
+          : meal
+      )
+    );
   };
 
   async function handleUpdateDietPlan() {
-    // Validate that all meals have at least one valid item
-    const isValid = ["Meal_1", "Meal_2", "Meal_3"].every(meal =>
-      newDietPlan[meal as keyof typeof newDietPlan].some(
-        item => item.name.trim() && item.quantity.trim()
-      )
+    // Validate that all meals have a name and at least one valid item
+    const isValid = newDietPlan.every(
+      meal =>
+        meal.name.trim() &&
+        meal.items.some(item => item.name.trim() && item.quantity.trim())
     );
 
     if (!selectedMember || !isValid) {
-      setError("Please enter at least one valid item for each meal");
-      toast.error("Please enter at least one valid item for each meal");
+      setError("Please enter a meal name and at least one valid item for each meal");
+      toast.error("Please enter a meal name and at least one valid item for each meal");
       return;
     }
 
@@ -297,17 +332,12 @@ export default function NutritionistDashboardPage() {
         throw new Error("Authentication required");
       }
 
-      const dietPlan = {
-        Meal_1: newDietPlan.Meal_1
+      const dietPlan = newDietPlan.reduce((acc, meal) => {
+        acc[meal.name] = meal.items
           .filter(item => item.name.trim() && item.quantity.trim())
-          .map(item => ({ [item.name.trim()]: item.quantity.trim() })),
-        Meal_2: newDietPlan.Meal_2
-          .filter(item => item.name.trim() && item.quantity.trim())
-          .map(item => ({ [item.name.trim()]: item.quantity.trim() })),
-        Meal_3: newDietPlan.Meal_3
-          .filter(item => item.name.trim() && item.quantity.trim())
-          .map(item => ({ [item.name.trim()]: item.quantity.trim() })),
-      };
+          .map(item => ({ [item.name.trim()]: item.quantity.trim() }));
+        return acc;
+      }, {} as { [key: string]: { [key: string]: string }[] });
 
       const payload = {
         user_email: selectedMember.email,
@@ -362,11 +392,7 @@ export default function NutritionistDashboardPage() {
       );
 
       setShowDietModal(false);
-      setNewDietPlan({
-        Meal_1: [{ name: "", quantity: "" }],
-        Meal_2: [{ name: "", quantity: "" }],
-        Meal_3: [{ name: "", quantity: "" }],
-      });
+      setNewDietPlan([{ name: "Meal 1", items: [{ name: "", quantity: "" }] }]);
       setSelectedMember(null);
       toast.success("Diet plan updated successfully!");
       loadMembers();
@@ -406,7 +432,6 @@ export default function NutritionistDashboardPage() {
         </div>
         <Button onClick={loadMembers} variant="outline">Refresh</Button>
       </div>
-      
 
       {error && (
         <motion.div
@@ -491,20 +516,17 @@ export default function NutritionistDashboardPage() {
                           size="sm"
                           onClick={() => {
                             setSelectedMember(member);
-                            setNewDietPlan({
-                              Meal_1: member.latest_diet_plan?.diet_plan.Meal_1?.map(item => ({
-                                name: Object.keys(item)[0],
-                                quantity: Object.values(item)[0],
-                              })) || [{ name: "", quantity: "" }],
-                              Meal_2: member.latest_diet_plan?.diet_plan.Meal_2?.map(item => ({
-                                name: Object.keys(item)[0],
-                                quantity: Object.values(item)[0],
-                              })) || [{ name: "", quantity: "" }],
-                              Meal_3: member.latest_diet_plan?.diet_plan.Meal_3?.map(item => ({
-                                name: Object.keys(item)[0],
-                                quantity: Object.values(item)[0],
-                              })) || [{ name: "", quantity: "" }],
-                            });
+                            setNewDietPlan(
+                              member.latest_diet_plan
+                                ? Object.entries(member.latest_diet_plan.diet_plan).map(([meal, items]) => ({
+                                    name: meal,
+                                    items: items.map(item => ({
+                                      name: Object.keys(item)[0],
+                                      quantity: Object.values(item)[0],
+                                    })),
+                                  }))
+                                : [{ name: "Meal 1", items: [{ name: "", quantity: "" }] }]
+                            );
                             setShowDietModal(true);
                           }}
                           disabled={updating === member.user_id}
@@ -535,47 +557,59 @@ export default function NutritionistDashboardPage() {
       <Dialog open={showDietModal} onOpenChange={(open) => {
         setShowDietModal(open);
         if (!open) {
-          setNewDietPlan({
-            Meal_1: [{ name: "", quantity: "" }],
-            Meal_2: [{ name: "", quantity: "" }],
-            Meal_3: [{ name: "", quantity: "" }],
-          });
+          setNewDietPlan([{ name: "Meal 1", items: [{ name: "", quantity: "" }] }]);
           setSelectedMember(null);
           setError(null);
         }
       }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {selectedMember?.latest_diet_plan ? `Update Diet Plan for ${selectedMember.name}` : `Assign Diet Plan for ${selectedMember?.name}`}
             </DialogTitle>
             <DialogDescription>
-              Enter items and quantities for each meal (e.g., Oats, 50g).
+              Enter meal names and items with quantities (e.g., Oats, 50g).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6">
-            {(["Meal_1", "Meal_2", "Meal_3"] as const).map(meal => (
-              <div key={meal}>
-                <Label className="text-lg font-semibold">{meal}</Label>
-                {newDietPlan[meal].map((item, index) => (
-                  <div key={index} className="flex items-center space-x-2 mt-2">
+            {newDietPlan.map((meal, mealIndex) => (
+              <div key={mealIndex}>
+                <div className="flex items-center space-x-2">
+                  <Input
+                    placeholder="Meal Name (e.g., Breakfast)"
+                    value={meal.name}
+                    onChange={(e) => updateMealName(mealIndex, e.target.value)}
+                    className="flex-1"
+                  />
+                  {newDietPlan.length > 1 && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => removeMeal(mealIndex)}
+                    >
+                      Remove Meal
+                    </Button>
+                  )}
+                </div>
+                {meal.items.map((item, itemIndex) => (
+                  <div key={itemIndex} className="flex items-center space-x-2 mt-2">
                     <Input
                       placeholder="Item (e.g., Oats)"
                       value={item.name}
-                      onChange={(e) => updateMealItem(meal, index, "name", e.target.value)}
+                      onChange={(e) => updateMealItem(mealIndex, itemIndex, "name", e.target.value)}
                       className="flex-1"
                     />
                     <Input
                       placeholder="Quantity (e.g., 50g)"
                       value={item.quantity}
-                      onChange={(e) => updateMealItem(meal, index, "quantity", e.target.value)}
+                      onChange={(e) => updateMealItem(mealIndex, itemIndex, "quantity", e.target.value)}
                       className="flex-1"
                     />
-                    {newDietPlan[meal].length > 1 && (
+                    {meal.items.length > 1 && (
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => removeMealItem(meal, index)}
+                        onClick={() => removeMealItem(mealIndex, itemIndex)}
                       >
                         Remove
                       </Button>
@@ -585,13 +619,21 @@ export default function NutritionistDashboardPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => addMealItem(meal)}
+                  onClick={() => addMealItem(mealIndex)}
                   className="mt-2"
                 >
                   Add Item
                 </Button>
               </div>
             ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addMeal}
+              className="mt-4"
+            >
+              Add Meal
+            </Button>
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-md flex items-center text-red-700 text-sm">
                 <AlertCircle className="h-4 w-4 mr-2" />
@@ -603,11 +645,7 @@ export default function NutritionistDashboardPage() {
                 variant="outline"
                 onClick={() => {
                   setShowDietModal(false);
-                  setNewDietPlan({
-                    Meal_1: [{ name: "", quantity: "" }],
-                    Meal_2: [{ name: "", quantity: "" }],
-                    Meal_3: [{ name: "", quantity: "" }],
-                  });
+                  setNewDietPlan([{ name: "Meal 1", items: [{ name: "", quantity: "" }] }]);
                   setSelectedMember(null);
                   setError(null);
                 }}

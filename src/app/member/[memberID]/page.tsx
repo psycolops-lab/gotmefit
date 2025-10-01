@@ -592,7 +592,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle,  DialogTrigger  } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -659,7 +659,7 @@ export default function MemberDashboardPage() {
   const router = useRouter();
   const params = useParams();
   const memberId = params.memberID as string;
-
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
@@ -703,6 +703,7 @@ export default function MemberDashboardPage() {
   ];
 
   const activityOptions = ["Basic", "Intermediate", "Advanced"];
+  
 
   const steps = [
     {
