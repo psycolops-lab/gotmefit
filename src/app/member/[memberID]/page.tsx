@@ -1197,83 +1197,51 @@ export default function MemberDashboardPage() {
   }
 
   async function handleWeightUpdate() {
-  if (!newWeight || isNaN(Number(newWeight))) {
-    setError("Please enter a valid weight");
-    toast.error("Please enter a valid weight");
-    return;
-  }
-
-  setLoading(true);
-  setError(null);
-
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      setError("Authentication required");
-      toast.error("Authentication required");
+    if (!newWeight || isNaN(Number(newWeight))) {
+      setError("Please enter a valid weight");
+      toast.error("Please enter a valid weight");
       return;
     }
 
-    const today = new Date().toISOString().split("T")[0];
-    const { data: existingEntry, error: fetchError } = await supabase
-      .from("weight_history")
-      .select("*")
-      .eq("member_id", memberId)
-      .eq("recorded_at", today)
-      .maybeSingle();
+    setLoading(true);
+    setError(null);
 
-    if (fetchError && fetchError.code !== "PGRST116") {
-      throw new Error(`Failed to check existing weight: ${fetchError.message}`);
-    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setError("Authentication required");
+        toast.error("Authentication required");
+        return;
+      }
 
-    let response;
-    if (existingEntry) {
-      response = await fetch("/api/member/update_weight", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          weight_id: existingEntry.id,
-          weight_kg: Number(newWeight),
-          updated_at: new Date().toISOString(),
-        }),
-      });
-    } else {
-      response = await fetch("/api/member/update_weight", {
+      const response = await fetch("/api/member/update_weight", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          weight_kg: Number(newWeight),
-          recorded_at: today,
-          updated_at: new Date().toISOString(),
-        }),
+        body: JSON.stringify({ weight_kg: Number(newWeight) }),
       });
-    }
 
-    if (response.ok) {
-      setShowWeightUpdateModal(false);
-      setNewWeight("");
-      await refreshData();
-      toast.success("Weight updated successfully!");
-    } else {
-      const result = await response.json();
-      console.error("Weight update error:", result.error);
-      setError(result.error || "Failed to update weight");
-      toast.error(result.error || "Failed to update weight");
+      if (response.ok) {
+        setShowWeightUpdateModal(false);
+        setNewWeight("");
+        await refreshData();
+        toast.success("Weight updated successfully!");
+      } else {
+        const result = await response.json();
+        console.error("Weight update error:", result.error);
+        setError(result.error || "Failed to update weight");
+        toast.error(result.error || "Failed to update weight");
+      }
+    } catch (error) {
+      console.error("Weight update error:", error);
+      setError("An unexpected error occurred. Please try again.");
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error("Weight update error:", error);
-    setError("An unexpected error occurred. Please try again.");
-    toast.error("An unexpected error occurred. Please try again.");
-  } finally {
-    setLoading(false);
   }
-}
 
   async function handlePhotoUpload(file: File) {
     if (!file || !isOwnProfile) {
