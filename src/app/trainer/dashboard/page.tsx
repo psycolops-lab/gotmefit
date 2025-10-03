@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -29,7 +30,8 @@ import {
   AlertCircle, 
   Ruler,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Eye
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -43,9 +45,7 @@ import {
   Legend,
   ResponsiveContainer
 } from "recharts";
-
-// Types
-
+import { useRouter } from "next/navigation";
 
 type Member = {
   id: string;
@@ -89,8 +89,9 @@ export default function TrainerDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
   const [chartData, setChartData] = useState<WeightChartData[]>([]);
+  const router = useRouter();
 
-useEffect(() => {
+  useEffect(() => {
     loadMembers();
   }, []);
 
@@ -109,7 +110,6 @@ useEffect(() => {
       const trainerId = session.user.id;
       console.log("Trainer ID:", trainerId);
 
-      // Step 1: DEBUG - Check all member_profiles to see what's assigned
       const { data: allProfiles, error: allError } = await supabase
         .from("member_profiles")
         .select("id, user_id, assigned_trainer_id, created_at")
@@ -120,29 +120,27 @@ useEffect(() => {
         allProfiles?.filter(p => p.assigned_trainer_id !== null)
       );
 
-      // Step 2: Fetch assigned members from member_profiles
       const { data: memberProfiles, error: mpError } = await supabase
-  .from("member_profiles")
-  .select(`
-    id,
-    user_id,
-    weight_kg,
-    bmi,
-    gender,
-    goal,
-    height_cm,
-    updated_at,
-    created_at,
-    assigned_trainer_id,
-    users!inner (
-      id,
-      name,
-      email
-    )
-  `)
-  .eq("assigned_trainer_id", trainerId)
-  .order("created_at", { ascending: true });
-
+        .from("member_profiles")
+        .select(`
+          id,
+          user_id,
+          weight_kg,
+          bmi,
+          gender,
+          goal,
+          height_cm,
+          updated_at,
+          created_at,
+          assigned_trainer_id,
+          users!inner (
+            id,
+            name,
+            email
+          )
+        `)
+        .eq("assigned_trainer_id", trainerId)
+        .order("created_at", { ascending: true });
 
       console.log("📊 Member profiles query result:", memberProfiles);
       console.log("🔍 Query used - assigned_trainer_id =", trainerId);
@@ -158,7 +156,6 @@ useEffect(() => {
         console.log("⚠️ No members found for trainer:", trainerId);
         console.log("🔍 Checking if trainer has any assignments in the system...");
         
-        // DEBUG: Check if trainer appears in any assignments
         const { data: trainerAssignments } = await supabase
           .from("member_profiles")
           .select("user_id, assigned_trainer_id")
@@ -173,11 +170,9 @@ useEffect(() => {
 
       console.log("✅ Found", memberProfiles.length, "members assigned to trainer");
 
-      // Step 3: Extract member user_ids
       const memberIds = memberProfiles.map(m => m.user_id);
       console.log("📝 Member IDs to fetch:", memberIds);
 
-      // Step 4: Fetch member details (name, email) from users table
       const { data: userDetails, error: userError } = await supabase
         .from("users")
         .select("id, name, email")
@@ -192,7 +187,6 @@ useEffect(() => {
         return;
       }
 
-      // Step 5: Fetch latest weight history for each member
       let latestWeights: WeightHistory[] = [];
       const { data: allWeightHistory, error: whError } = await supabase
         .from("weight_history")
@@ -204,9 +198,7 @@ useEffect(() => {
 
       if (whError) {
         console.error(" Weight history error:", whError);
-        // Don't fail completely, just log and continue
       } else {
-        // Get the latest weight for each member (one per member)
         const weightMap = new Map<string, WeightHistory>();
         allWeightHistory?.forEach(wh => {
           if (!weightMap.has(wh.member_id)) {
@@ -218,9 +210,7 @@ useEffect(() => {
         console.log("📊 Latest weights per member:", latestWeights.length);
       }
 
-      // Step 6: Merge all data
       const mergedMembers: Member[] = memberProfiles.map(member => {
-        // Find user details by matching IDs
         const userDetail = userDetails?.find(u => u.id === member.user_id);
         console.log(`🔗 Member ${member.user_id}:`, {
           userFound: !!userDetail,
@@ -228,7 +218,6 @@ useEffect(() => {
           userEmail: userDetail?.email
         });
         
-        // Find latest weight
         const latestWeight = latestWeights.find(wh => wh.member_id === member.user_id);
         
         return {
@@ -275,7 +264,6 @@ useEffect(() => {
         throw error;
       }
 
-      // Transform for chart - get last 12 months or all if less
       const chartData: WeightChartData[] = (history || []).map(h => ({
         date: new Date(h.recorded_at).toLocaleDateString('en-US', { 
           month: 'short', 
@@ -283,7 +271,7 @@ useEffect(() => {
         }),
         weight: h.weight_kg,
         bmi: h.bmi || undefined,
-      })).slice(-12); // Last 12 entries
+      })).slice(-12);
 
       setWeightHistory(history || []);
       setChartData(chartData);
@@ -294,76 +282,75 @@ useEffect(() => {
   }
 
   async function handleUpdateWeight() {
-  if (!selectedMember || !newWeight) {
-    setError("Please enter a weight");
-    return;
-  }
-
-  console.log("Updating weight for member_user_id:", selectedMember.user_id); // Debug log
-
-  setUpdating(selectedMember.user_id);
-  setError(null);
-
-  try {
-    const weightNum = parseFloat(newWeight);
-    if (isNaN(weightNum) || weightNum < 30 || weightNum > 200) {
-      setError("Please enter a valid weight between 30-200 kg");
+    if (!selectedMember || !newWeight) {
+      setError("Please enter a weight");
       return;
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      throw new Error("Authentication required");
+    console.log("Updating weight for member_user_id:", selectedMember.user_id);
+
+    setUpdating(selectedMember.user_id);
+    setError(null);
+
+    try {
+      const weightNum = parseFloat(newWeight);
+      if (isNaN(weightNum) || weightNum < 30 || weightNum > 200) {
+        setError("Please enter a valid weight between 30-200 kg");
+        return;
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error("Authentication required");
+      }
+
+      const response = await fetch("/api/trainer/update-weight", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          member_user_id: selectedMember.user_id,
+          weight_kg: weightNum,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error("API error response:", result);
+        throw new Error(result.error || "Failed to update weight");
+      }
+
+      setMembers(prev =>
+        prev.map(member =>
+          member.user_id === selectedMember.user_id
+            ? {
+                ...member,
+                weight_kg: weightNum,
+                bmi: result.bmi,
+                updated_at: new Date().toISOString(),
+                latest_weight: result.weight_kg,
+                latest_bmi: result.bmi,
+                latest_updated: new Date().toISOString(),
+              }
+            : member
+        )
+      );
+
+      setShowWeightModal(false);
+      setNewWeight("");
+      setSelectedMember(null);
+      alert("Weight updated successfully!");
+
+    } catch (err: any) {
+      console.error("Error updating weight:", err.message);
+      setError(err.message || "Failed to update weight");
+    } finally {
+      setUpdating(null);
     }
-
-    const response = await fetch("/api/trainer/update-weight", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        member_user_id: selectedMember.user_id,
-        weight_kg: weightNum,
-      }),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error("API error response:", result); // Debug log
-      throw new Error(result.error || "Failed to update weight");
-    }
-
-    // Update local state
-    setMembers(prev =>
-      prev.map(member =>
-        member.user_id === selectedMember.user_id
-          ? {
-              ...member,
-              weight_kg: weightNum,
-              bmi: result.bmi,
-              updated_at: new Date().toISOString(),
-              latest_weight: result.weight_kg,
-              latest_bmi: result.bmi,
-              latest_updated: new Date().toISOString(),
-            }
-          : member
-      )
-    );
-
-    setShowWeightModal(false);
-    setNewWeight("");
-    setSelectedMember(null);
-    alert("Weight updated successfully!");
-
-  } catch (err: any) {
-    console.error("Error updating weight:", err.message);
-    setError(err.message || "Failed to update weight");
-  } finally {
-    setUpdating(null);
   }
-}
 
   const openWeightModal = (member: Member) => {
     setSelectedMember(member);
@@ -388,7 +375,6 @@ useEffect(() => {
     setChartData([]);
   };
 
-  // Weight change calculation
   const getWeightChange = (member: Member) => {
     if (!member.latest_weight || !member.weight_kg) return null;
     const change = member.latest_weight - member.weight_kg;
@@ -540,7 +526,14 @@ useEffect(() => {
                           </div>
                         </TableCell>
                         <TableCell className="text-right space-x-2">
-                          {/* Chart Modal */}
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => router.push(`/member/${member.user_id}`)}
+                            title="View Member Dashboard"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
                           <Dialog 
                             open={showChartModal && selectedMember?.user_id === member.user_id} 
                             onOpenChange={(open) => {
@@ -643,7 +636,6 @@ useEffect(() => {
                             </DialogContent>
                           </Dialog>
 
-                          {/* Weight Update Modal */}
                           <Dialog 
                             open={showWeightModal && selectedMember?.user_id === member.user_id}
                             onOpenChange={(open) => {

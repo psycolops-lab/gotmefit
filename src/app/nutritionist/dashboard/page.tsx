@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -21,9 +22,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, User, Apple, AlertCircle, BarChart2 } from "lucide-react";
+import { Loader2, User, Apple, AlertCircle, BarChart2, Eye } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import {
   LineChart,
   Line,
@@ -92,6 +94,7 @@ export default function NutritionistDashboardPage() {
   const [dietHistory, setDietHistory] = useState<DietHistory[]>([]);
   const [chartData, setChartData] = useState<DietChartData[]>([]);
   const memoizedMembers = useMemo(() => members, [members]);
+  const router = useRouter();
 
   useEffect(() => {
     loadMembers();
@@ -116,7 +119,6 @@ export default function NutritionistDashboardPage() {
         email: session.user.email,
       });
 
-      // Fetch assigned members
       const { data: memberProfiles, error: mpError } = await supabase
         .from("member_profiles")
         .select(`
@@ -148,7 +150,6 @@ export default function NutritionistDashboardPage() {
 
       const memberIds = memberProfiles.map(m => m.user_id);
 
-      // Fetch member details from users
       const { data: userDetails, error: userError } = await supabase
         .from("users")
         .select("id, name, email")
@@ -161,7 +162,6 @@ export default function NutritionistDashboardPage() {
 
       console.log("loadMembers: userDetails:", userDetails);
 
-      // Fetch latest diet plans
       const { data: dietPlans, error: dietError } = await supabase
         .from("diet")
         .select("*")
@@ -310,7 +310,6 @@ export default function NutritionistDashboardPage() {
   };
 
   async function handleUpdateDietPlan() {
-    // Validate that all meals have a name and at least one valid item
     const isValid = newDietPlan.every(
       meal =>
         meal.name.trim() &&
@@ -473,10 +472,12 @@ export default function NutritionistDashboardPage() {
                   {members.map(member => (
                     <TableRow key={member.id}>
                       <TableCell className="font-medium">
-                        <div className="font-semibold">{member.name}</div>
-                        {member.email && (
-                          <div className="text-sm text-gray-500">{member.email}</div>
-                        )}
+                        <div>
+                          <div className="font-semibold">{member.name}</div>
+                          {member.email && (
+                            <div className="text-sm text-gray-500">{member.email}</div>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1">
@@ -499,6 +500,14 @@ export default function NutritionistDashboardPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => router.push(`/member/${member.user_id}`)}
+                          title="View Member Dashboard"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -553,7 +562,6 @@ export default function NutritionistDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Diet Plan Update Modal */}
       <Dialog open={showDietModal} onOpenChange={(open) => {
         setShowDietModal(open);
         if (!open) {
@@ -667,7 +675,6 @@ export default function NutritionistDashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Diet History Chart Modal */}
       <Dialog open={showChartModal} onOpenChange={(open) => {
         setShowChartModal(open);
         if (!open) {
