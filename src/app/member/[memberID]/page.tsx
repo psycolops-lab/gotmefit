@@ -670,6 +670,8 @@ type DietChartData = {
   completedMeals: number;
 };
 
+
+
 export default function MemberDashboardPage() {
   const router = useRouter();
   const params = useParams();
@@ -726,115 +728,134 @@ export default function MemberDashboardPage() {
 
   const activityOptions = ["Basic", "Intermediate", "Advanced"];
 
+  // Dynamic meal image mapping
+const mealImageMap: { [key: string]: string } = {
+    breakfast: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75', // Healthy bowl with fruit, seeds, and yogurt
+    lunch: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',   // Fresh salad with vegetables and protein
+    dinner: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',   // Plate with salmon and vegetables
+    snack: 'https://images.unsplash.com/photo-1496412705862-e0088f16f791?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',    // Fresh fruit and nuts/seeds
+    'meal 1': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',   // Meal prep container with balanced meal
+    'meal 2': 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',   // Healthy chicken and vegetables
+    'meal 3': 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',   // Clean eating bowl with grains and greens
+  };
   const getMealName = (mealKey: any) => {
     if (!mealKey || typeof mealKey !== 'string') {
       console.warn('Invalid mealKey:', mealKey);
       return 'Unknown Meal';
     }
-    const mealNames = {
+    const mealNames: { [key: string]: string } = {
       Meal_1: 'Breakfast',
       Meal_2: 'Lunch',
       Meal_3: 'Dinner',
     };
-    const sanitizedKey = mealKey.trim().replace(/[_-]/g, ' ');
-    return (mealNames as Record<string, string>)[mealKey] || sanitizedKey.charAt(0).toUpperCase() + sanitizedKey.slice(1);
+    const sanitizedKey = mealKey.trim().replace(/[_-]/g, ' ').toLowerCase();
+    return mealNames[mealKey] || sanitizedKey.charAt(0).toUpperCase() + sanitizedKey.slice(1);
   };
 
   const getMealImage = (mealKey: any) => {
-    const name = getMealName(mealKey).toLowerCase().replace(/\s+/g, ',');
-    const imageUrl = `https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75&query=${encodeURIComponent(name)}`;
-    console.log('Generated image URL for', mealKey, ':', imageUrl);
-    return imageUrl;
+    const name = getMealName(mealKey).toLowerCase();
+    return mealImageMap[name] || mealImageMap['meal 1'] || 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75';
   };
 
-  const fallbackImage = 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75';
-
-  const steps = [
-    {
-      title: "Tell us about yourself",
-      content: (
-        <div className="space-y-4">
-          <ToggleGroup type="single" value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
-            <ToggleGroupItem value="male" className="flex-1">
-              <User className="mr-2" /> Male
-            </ToggleGroupItem>
-            <ToggleGroupItem value="female" className="flex-1">
-              <User className="mr-2" /> Female
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-      ),
-      isValid: () => !!formData.gender,
-    },
-    {
-      title: "What is your height?",
-      content: (
-        <div className="space-y-4">
-          <Slider
-            min={100}
-            max={250}
-            step={1}
-            value={[formData.height_cm]}
-            onValueChange={(v) => setFormData({ ...formData, height_cm: v[0] })}
-          />
-          <div className="text-center font-semibold">{formData.height_cm} cm</div>
-        </div>
-      ),
-      isValid: () => formData.height_cm > 0,
-    },
-    {
-      title: "What is your weight?",
-      content: (
-        <div className="space-y-4">
-          <Slider
-            min={30}
-            max={150}
-            step={0.1}
-            value={[formData.weight_kg]}
-            onValueChange={(v) => setFormData({ ...formData, weight_kg: v[0] })}
-          />
-          <div className="text-center font-semibold">{formData.weight_kg.toFixed(1)} kg</div>
-        </div>
-      ),
-      isValid: () => formData.weight_kg > 0,
-    },
-    {
-      title: "What is your goal?",
-      content: (
-        <Select value={formData.goal} onValueChange={(v) => setFormData({ ...formData, goal: v })}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select goal" />
-          </SelectTrigger>
-          <SelectContent>
-            {goalOptions.map((opt) => (
-              <SelectItem key={opt} value={opt}>
-                {opt}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ),
-      isValid: () => !!formData.goal,
-    },
-    {
-      title: "What is your physical activity level?",
-      content: (
-        <Select value={formData.activity_level} onValueChange={(v) => setFormData({ ...formData, activity_level: v })}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select level" />
-          </SelectTrigger>
-          <SelectContent>
-            {activityOptions.map((opt) => (
-              <SelectItem key={opt} value={opt}>
-                {opt}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ),
-      isValid: () => !!formData.activity_level,
-    },
-  ];
+  // Define steps dynamically based on missing profile fields
+  const getDynamicSteps = (profile: MemberProfile | null) => {
+    const steps = [];
+    if (!profile?.gender) {
+      steps.push({
+        title: "Tell us about yourself",
+        content: (
+          <div className="space-y-4">
+            <ToggleGroup type="single" value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
+              <ToggleGroupItem value="male" className="flex-1">
+                <User className="mr-2" /> Male
+              </ToggleGroupItem>
+              <ToggleGroupItem value="female" className="flex-1">
+                <User className="mr-2" /> Female
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        ),
+        isValid: () => !!formData.gender,
+      });
+    }
+    if (!profile?.height_cm) {
+      steps.push({
+        title: "What is your height?",
+        content: (
+          <div className="space-y-4">
+            <Slider
+              min={100}
+              max={250}
+              step={1}
+              value={[formData.height_cm]}
+              onValueChange={(v) => setFormData({ ...formData, height_cm: v[0] })}
+            />
+            <div className="text-center font-semibold">{formData.height_cm} cm</div>
+          </div>
+        ),
+        isValid: () => formData.height_cm > 0,
+      });
+    }
+    if (!profile?.weight_kg) {
+      steps.push({
+        title: "What is your weight?",
+        content: (
+          <div className="space-y-4">
+            <Slider
+              min={30}
+              max={150}
+              step={0.1}
+              value={[formData.weight_kg]}
+              onValueChange={(v) => setFormData({ ...formData, weight_kg: v[0] })}
+            />
+            <div className="text-center font-semibold">{formData.weight_kg.toFixed(1)} kg</div>
+          </div>
+        ),
+        isValid: () => formData.weight_kg > 0,
+      });
+    }
+    if (!profile?.goal) {
+      steps.push({
+        title: "What is your goal?",
+        content: (
+          <Select value={formData.goal} onValueChange={(v) => setFormData({ ...formData, goal: v })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select goal" />
+            </SelectTrigger>
+            <SelectContent>
+              {goalOptions.map((opt) => (
+                <SelectItem key={opt} value={opt}>
+                  {opt}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ),
+        isValid: () => !!formData.goal,
+      });
+    }
+    if (!profile?.activity_level) {
+      steps.push({
+        title: "What is your physical activity level?",
+        content: (
+          <Select value={formData.activity_level} onValueChange={(v) => setFormData({ ...formData, activity_level: v })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select level" />
+            </SelectTrigger>
+            <SelectContent>
+              {activityOptions.map((opt) => (
+                <SelectItem key={opt} value={opt}>
+                  {opt}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ),
+        isValid: () => !!formData.activity_level,
+      });
+    }
+    return steps;
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -852,8 +873,6 @@ export default function MemberDashboardPage() {
 
         const loggedInUserId = session.user.id;
         setIsOwnProfile(memberId === loggedInUserId);
-        console.log("Session:", { userId: session?.user?.id, email: session?.user?.email, error: sessionError });
-        console.log("isOwnProfile:", memberId === loggedInUserId, { memberId, loggedInUserId });
 
         // Fetch member profile
         const { data: mp, error: mpErr } = await supabase
@@ -895,7 +914,7 @@ export default function MemberDashboardPage() {
 
         // Fetch gallery photos if allowed
         let gp: GalleryPhoto[] = [];
-        if (viewerRole === 'member' || viewerRole === 'admin' ) {
+        if (viewerRole === 'member' || viewerRole === 'admin') {
           const { data: gpData, error: gpErr } = await supabase
             .from("gallery")
             .select("id, date, photo")
@@ -963,11 +982,10 @@ export default function MemberDashboardPage() {
           const latestPhoto = gp?.[0];
           const canUpload = !latestPhoto || isAfter(new Date(), addDays(new Date(latestPhoto.date), 7));
           setCanUploadPhoto(canUpload);
-          console.log("canUploadPhoto:", canUpload, { latestPhoto, galleryPhotosLength: gp?.length });
         }
 
         // Fetch trainer
-        if (mp?.assigned_trainer_id) {
+         if (mp?.assigned_trainer_id) {
    const res = await fetch(`/api/member/trainer?trainer_id=${mp.assigned_trainer_id}`);
    const json = await res.json();
    if (json.trainer_name) {
@@ -982,8 +1000,9 @@ export default function MemberDashboardPage() {
    }
  }
 
-        // Show setup modal for own profile if incomplete
-        if (loggedInUserId === memberId && (!mp?.height_cm || !mp?.weight_kg || !mp?.bmi || !mp?.gender || !mp?.goal || !mp?.activity_level)) {
+        // Show setup modal only for own profile with incomplete data
+        if (loggedInUserId === memberId && 
+            (!mp?.height_cm || !mp?.weight_kg || !mp?.bmi || !mp?.gender || !mp?.goal || !mp?.activity_level)) {
           setShowSetupModal(true);
         }
       } catch (err: any) {
@@ -1002,10 +1021,16 @@ export default function MemberDashboardPage() {
     };
   }, [memberId, router]);
 
+  // Modified weight extraction to use member_profiles when weight_history is empty
   const lastWeight = useMemo(() => {
-    if (weightHistory.length === 0) return null;
-    return weightHistory[weightHistory.length - 1];
-  }, [weightHistory]);
+    if (weightHistory.length > 0) {
+      return weightHistory[weightHistory.length - 1];
+    }
+    if (profile?.weight_kg) {
+      return { weight_kg: profile.weight_kg, recorded_at: profile.plan_start || new Date().toISOString() };
+    }
+    return null;
+  }, [weightHistory, profile]);
 
   const weightUpdatedAgo = lastWeight ? formatDistanceToNowStrict(new Date(lastWeight.recorded_at)) : null;
   const isStale = !lastWeight || (Date.now() - new Date(lastWeight.recorded_at).getTime()) > 24 * 3600 * 1000;
@@ -1035,7 +1060,7 @@ export default function MemberDashboardPage() {
       }
 
       let gp: GalleryPhoto[] = [];
-      if (userRole === 'member' || userRole === 'admin' || userRole === 'trainer') {
+      if (userRole === 'member' || userRole === 'admin') {
         const { data: gpData, error: gpErr } = await supabase.from("gallery").select("id, date, photo").eq("user_id", memberId).order("date", { ascending: false });
         if (gpErr) throw new Error(`Gallery fetch error: ${gpErr.message}`);
         gp = gpData as GalleryPhoto[];
@@ -1122,7 +1147,8 @@ export default function MemberDashboardPage() {
   }
 
   async function handleSetupSubmit() {
-    if (!formData.gender || !formData.height_cm || !formData.weight_kg || !formData.goal || !formData.activity_level) {
+    const steps = getDynamicSteps(profile);
+    if (!steps[currentStep].isValid()) {
       setError("Please complete all required fields");
       toast.error("Please complete all required fields");
       return;
@@ -1159,11 +1185,11 @@ export default function MemberDashboardPage() {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          height_cm: Number(formData.height_cm),
-          weight_kg: Number(formData.weight_kg),
-          gender: formData.gender,
-          goal: formData.goal,
-          activity_level: formData.activity_level,
+          height_cm: formData.height_cm || profile?.height_cm,
+          weight_kg: formData.weight_kg || profile?.weight_kg,
+          gender: formData.gender || profile?.gender,
+          goal: formData.goal || profile?.goal,
+          activity_level: formData.activity_level || profile?.activity_level,
         }),
       });
 
@@ -1276,13 +1302,6 @@ export default function MemberDashboardPage() {
       if (memberId !== session.user.id) {
         throw new Error("Unauthorized: memberId does not match authenticated user");
       }
-
-      console.log("Upload attempt:", {
-        memberId,
-        userId: session.user.id,
-        email: session.user.email,
-        accessToken: session.access_token.substring(0, 10) + "...",
-      });
 
       const { count, error: countError } = await supabase
         .from("gallery")
@@ -1541,7 +1560,6 @@ export default function MemberDashboardPage() {
     }
   }
 
-  // Filter missed meals for the Missed Diet dialog
   const missedMeals = useMemo(() => {
     return dietHistory.flatMap(history =>
       Object.entries(history.intake)
@@ -1556,8 +1574,11 @@ export default function MemberDashboardPage() {
 
   const showWeightSection = userRole === 'member' || userRole === 'admin' || userRole === 'trainer' || userRole === 'nutritionist';
   const showDietSection = userRole === 'member' || userRole === 'admin' || userRole === 'nutritionist';
-  const showPlanSection = userRole === 'member' || userRole === 'admin' || userRole === 'trainer'|| userRole === 'nutritionist';
-  const showPhotoGallery = userRole === 'member' || userRole === 'admin' ;
+  const showPlanSection = userRole === 'member' || userRole === 'admin' || userRole === 'trainer' || userRole === 'nutritionist';
+  const showPhotoGallery = userRole === 'member' || userRole === 'admin';
+
+  // Get dynamic steps for the setup modal
+  const steps = getDynamicSteps(profile);
 
   if (error) {
     return (
@@ -1579,59 +1600,109 @@ export default function MemberDashboardPage() {
       className="space-y-6 p-6 mt-15 min-h-screen"
     >
       <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
-      <div className="mb-4">
+      <div className="mb-4 flex justify-between items-center">
         <Button
           variant="outline"
           size="sm"
-          onClick={() => router.push(userRole === 'trainer' ? '/trainer/dashboard' : userRole === 'nutritionist' ? '/nutritionist/dashboard' : '/admin/dashboard')}
+          onClick={() => {
+            if (userRole === 'member') {
+              router.push(`/member/${memberId}`);
+            } else if (userRole === 'trainer') {
+              router.push('/trainer/dashboard');
+            } else if (userRole === 'nutritionist') {
+              router.push('/nutritionist/dashboard');
+            } else {
+              router.push('/admin/dashboard');
+            }
+          }}
           className="flex items-center gap-2"
         >
-          &#8592; Back to {userRole === 'trainer' ? 'Trainer' : userRole === 'nutritionist' ? 'Nutritionist' : 'Admin'} Dashboard
+          &#8592; Back to {userRole === 'member' ? 'Member' : userRole === 'trainer' ? 'Trainer' : userRole === 'nutritionist' ? 'Nutritionist' : 'Admin'} Dashboard
         </Button>
+        {/* {isOwnProfile && (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => {
+              setFormData({
+                gender: profile?.gender || "",
+                height_cm: profile?.height_cm || 170,
+                weight_kg: profile?.weight_kg || 70,
+                goal: profile?.goal || "",
+                activity_level: profile?.activity_level || "",
+              });
+              setShowSetupModal(true);
+            }}
+          >
+            Update Profile Details
+          </Button>
+        )} */}
       </div>
 
-      <Dialog open={showSetupModal} onOpenChange={(open) => !open && refreshData()}>
+      <Dialog open={showSetupModal} onOpenChange={(open) => {
+        if (!open) {
+          setShowSetupModal(false);
+          setCurrentStep(0);
+          refreshData();
+        }
+      }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{steps[currentStep].title}</DialogTitle>
+            <DialogTitle>{steps[currentStep]?.title || "Complete Your Profile"}</DialogTitle>
           </DialogHeader>
           <AnimatePresence mode="wait">
-            <motion.div
-              key={currentStep}
-              initial={{ opacity: 0, x: 50 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 50 }}
-              transition={{ duration: 0.3 }}
-            >
-              {steps[currentStep].content}
-            </motion.div>
+            {steps.length > 0 && (
+              <motion.div
+                key={currentStep}
+                initial={{ opacity: 0, x: 50 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 50 }}
+                transition={{ duration: 0.3 }}
+              >
+                {steps[currentStep]?.content}
+              </motion.div>
+            )}
           </AnimatePresence>
           <div className="flex justify-between mt-6">
-            {currentStep > 0 && (
-              <Button variant="outline" onClick={() => setCurrentStep(currentStep - 1)}>
-                Back
-              </Button>
-            )}
             <Button
-              disabled={!steps[currentStep].isValid() || loading}
+              variant="outline"
               onClick={() => {
-                if (currentStep < steps.length - 1) {
-                  setCurrentStep(currentStep + 1);
-                } else {
-                  handleSetupSubmit();
-                }
+                setShowSetupModal(false);
+                setCurrentStep(0);
+                refreshData();
               }}
-              className="mt-2"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {currentStep < steps.length - 1 ? "Loading..." : "Saving..."}
-                </>
-              ) : (
-                currentStep < steps.length - 1 ? "Next" : "Submit"
-              )}
+              Close
             </Button>
+            {steps.length > 0 && (
+              <>
+                {currentStep > 0 && (
+                  <Button variant="outline" onClick={() => setCurrentStep(currentStep - 1)}>
+                    Back
+                  </Button>
+                )}
+                <Button
+                  disabled={!steps[currentStep]?.isValid() || loading}
+                  onClick={() => {
+                    if (currentStep < steps.length - 1) {
+                      setCurrentStep(currentStep + 1);
+                    } else {
+                      handleSetupSubmit();
+                    }
+                  }}
+                  className="mt-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {currentStep < steps.length - 1 ? "Loading..." : "Saving..."}
+                    </>
+                  ) : (
+                    currentStep < steps.length - 1 ? "Next" : "Submit"
+                  )}
+                </Button>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -1819,7 +1890,7 @@ export default function MemberDashboardPage() {
                     <div className="mt-2 text-lg font-bold">{lastWeight ? `${lastWeight.weight_kg} kg` : "No data"}</div>
                     <div className="text-xs text-muted-foreground items-center flex">{weightUpdatedAgo ? `Updated ${weightUpdatedAgo} ago` : "-"}</div>
                     <div className="mt-2 flex">
-                      { (isOwnProfile || userRole === 'trainer') && (
+                      {(isOwnProfile || userRole === 'trainer') && (
                         <Button variant="default" onClick={() => setShowWeightUpdateModal(true)}>
                           Track
                         </Button>
@@ -1959,7 +2030,7 @@ export default function MemberDashboardPage() {
                         transition={{ delay: index * 0.1 }}
                         className="rounded-xl overflow-hidden shadow-md bg-white flex flex-col"
                       >
-                        <div className="relative w-full h-32">
+                        <div className="relative w-full h-45">
                           <Image
                             src={getMealImage(meal)}
                             alt={`${getMealName(meal)} image`}
@@ -1967,10 +2038,6 @@ export default function MemberDashboardPage() {
                             sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
                             className="object-cover"
                             priority={index < 4}
-                            onError={(e) => {
-                              console.error('Image load error for', meal);
-                              e.currentTarget.src = fallbackImage;
-                            }}
                           />
                         </div>
                         <div className="p-4 flex-1">
