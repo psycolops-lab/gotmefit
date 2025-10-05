@@ -1,44 +1,39 @@
-// app/page.tsx
 'use client';
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 
 export default function Home() {
   const router = useRouter();
 
-  useEffect(() => {
-    const checkSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+  const handleAppointment = () => {
+    router.push('/book');
+  };
 
-      if (session) {
-        // ✅ If logged in → get role and send to correct dashboard
-        const { data: profile } = await supabase
-          .from("users")
-          .select("role")
-          .eq("id", session.user.id)
-          .single();
+  const handleLogin = () => {
+    router.push('/login');
+  };
 
-        const role = profile?.role;
-
-        if (role === "superadmin") return router.replace("/superadmin/dashboard");
-        if (role === "admin") return router.replace("/admin/dashboard");
-        if (role === "trainer") return router.replace("/trainer/dashboard");
-        if (role === "nutritionist") return router.replace("/nutritionist/dashboard");
-        if (role === "member") return router.replace("/member/dashboard");
-
-        return router.replace("/dashboard"); // fallback
-      } else {
-        // ❌ Not logged in → redirect to /login
-        router.replace("/login");
-      }
-    };
-
-    checkSession();
-  }, [router]);
-
-  return null; // nothing rendered because we always redirect
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+      <div className="text-center p-8 max-w-2xl">
+        <h1 className="text-4xl font-bold text-gray-900 mb-6">Welcome to GotMeFit</h1>
+        <p className="text-xl text-gray-600 mb-8">Your personal fitness and wellness companion</p>
+        
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <button
+            onClick={handleAppointment}
+            className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Book an Appointment
+          </button>
+          <button
+            onClick={handleLogin}
+            className="px-6 py-3 bg-white text-gray-800 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Login
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
