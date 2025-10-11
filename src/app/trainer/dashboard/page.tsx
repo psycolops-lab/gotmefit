@@ -1,40 +1,40 @@
+'use client';
 
-"use client";
-
-import React, { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
-} from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { 
-  Loader2, 
-  User, 
-  Scale, 
-  AlertCircle, 
+import { toast } from 'sonner';
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Loader2,
+  User,
+  Scale,
+  AlertCircle,
   Ruler,
   TrendingUp,
   TrendingDown,
-  Eye
-} from "lucide-react";
-import { formatDistanceToNowStrict } from "date-fns";
-import { motion, AnimatePresence } from "framer-motion";
+  Eye,
+} from 'lucide-react';
+import { formatDistanceToNowStrict } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   LineChart,
   Line,
@@ -43,9 +43,10 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer
-} from "recharts";
-import { useRouter } from "next/navigation";
+  ResponsiveContainer,
+} from 'recharts';
+import { useRouter } from 'next/navigation';
+import { WorkoutCreationForm } from '@/components/WorkoutCreationForm';
 
 type Member = {
   id: string;
@@ -84,8 +85,9 @@ export default function TrainerDashboardPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showChartModal, setShowChartModal] = useState(false);
+  const [showWorkoutModal, setShowWorkoutModal] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
-  const [newWeight, setNewWeight] = useState("");
+  const [newWeight, setNewWeight] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
   const [chartData, setChartData] = useState<WeightChartData[]>([]);
@@ -98,30 +100,20 @@ export default function TrainerDashboardPage() {
   async function loadMembers() {
     setLoading(true);
     setError(null);
-    
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user?.id) {
-        setError("Not authenticated");
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.user?.id) {
+        setError('Not authenticated');
         setLoading(false);
+        router.push('/login');
         return;
       }
 
       const trainerId = session.user.id;
-      console.log("Trainer ID:", trainerId);
-
-      const { data: allProfiles, error: allError } = await supabase
-        .from("member_profiles")
-        .select("id, user_id, assigned_trainer_id, created_at")
-        .limit(10);
-
-      console.log(" All member_profiles in system:", allProfiles);
-      console.log(" Member profiles with trainer assignments:", 
-        allProfiles?.filter(p => p.assigned_trainer_id !== null)
-      );
 
       const { data: memberProfiles, error: mpError } = await supabase
-        .from("member_profiles")
+        .from('member_profiles')
         .select(`
           id,
           user_id,
@@ -139,49 +131,29 @@ export default function TrainerDashboardPage() {
             email
           )
         `)
-        .eq("assigned_trainer_id", trainerId)
-        .order("created_at", { ascending: true });
-
-      console.log("📊 Member profiles query result:", memberProfiles);
-      console.log("🔍 Query used - assigned_trainer_id =", trainerId);
+        .eq('assigned_trainer_id', trainerId)
+        .order('created_at', { ascending: true });
 
       if (mpError) {
-        console.error("❌ Member profiles error:", mpError);
         setError(`Failed to load members: ${mpError.message}`);
         setLoading(false);
         return;
       }
 
       if (!memberProfiles || memberProfiles.length === 0) {
-        console.log("⚠️ No members found for trainer:", trainerId);
-        console.log("🔍 Checking if trainer has any assignments in the system...");
-        
-        const { data: trainerAssignments } = await supabase
-          .from("member_profiles")
-          .select("user_id, assigned_trainer_id")
-          .eq("assigned_trainer_id", trainerId);
-
-        console.log("🔍 Trainer assignments found:", trainerAssignments);
-        
         setMembers([]);
         setLoading(false);
         return;
       }
 
-      console.log("✅ Found", memberProfiles.length, "members assigned to trainer");
-
       const memberIds = memberProfiles.map(m => m.user_id);
-      console.log("📝 Member IDs to fetch:", memberIds);
 
       const { data: userDetails, error: userError } = await supabase
-        .from("users")
-        .select("id, name, email")
-        .in("id", memberIds);
-
-      console.log("User details found:", userDetails?.length || 0);
+        .from('users')
+        .select('id, name, email')
+        .in('id', memberIds);
 
       if (userError) {
-        console.error(" User details error:", userError);
         setError(`Failed to load member details: ${userError.message}`);
         setLoading(false);
         return;
@@ -189,15 +161,13 @@ export default function TrainerDashboardPage() {
 
       let latestWeights: WeightHistory[] = [];
       const { data: allWeightHistory, error: whError } = await supabase
-        .from("weight_history")
-        .select("id, member_id, weight_kg, bmi, recorded_at")
-        .in("member_id", memberIds)
-        .order("recorded_at", { ascending: false });
-
-      console.log(" Weight history found:", allWeightHistory?.length || 0);
+        .from('weight_history')
+        .select('id, member_id, weight_kg, bmi, recorded_at')
+        .in('member_id', memberIds)
+        .order('recorded_at', { ascending: false });
 
       if (whError) {
-        console.error(" Weight history error:", whError);
+        // Handle error silently or log
       } else {
         const weightMap = new Map<string, WeightHistory>();
         allWeightHistory?.forEach(wh => {
@@ -205,25 +175,17 @@ export default function TrainerDashboardPage() {
             weightMap.set(wh.member_id, wh);
           }
         });
-        
         latestWeights = Array.from(weightMap.values());
-        console.log("📊 Latest weights per member:", latestWeights.length);
       }
 
       const mergedMembers: Member[] = memberProfiles.map(member => {
         const userDetail = userDetails?.find(u => u.id === member.user_id);
-        console.log(`🔗 Member ${member.user_id}:`, {
-          userFound: !!userDetail,
-          userName: userDetail?.name,
-          userEmail: userDetail?.email
-        });
-        
         const latestWeight = latestWeights.find(wh => wh.member_id === member.user_id);
-        
+
         return {
           id: member.id,
           user_id: member.user_id,
-          name: userDetail?.name || "Unknown User",
+          name: userDetail?.name || 'Unknown User',
           email: userDetail?.email,
           weight_kg: member.weight_kg,
           bmi: member.bmi,
@@ -238,36 +200,62 @@ export default function TrainerDashboardPage() {
         };
       });
 
-      console.log("🎉 Final merged members:", mergedMembers);
-      console.log("📝 Member IDs from member_profiles:", memberIds);
-
       setMembers(mergedMembers);
     } catch (err: any) {
-      console.error("💥 Error loading members:", err);
-      setError("Failed to load members: " + err.message);
+      setError('Failed to load members: ' + err.message);
     } finally {
       setLoading(false);
     }
   }
 
+  const handleCreateWorkout = async (plan: any, assignedTo: string) => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('TrainerDashboard - Session for API call:', session);
+    if (!session) {
+      toast.error('Not authenticated. Please log in.');
+      router.push('/login');
+      return;
+    }
+
+    const response = await fetch('/api/workout/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ assigned_to: assignedTo, plan }),
+    });
+
+    if (!response.ok) {
+      const { error } = await response.json();
+      throw new Error(error);
+    }
+
+    toast.success('Workout assigned successfully');
+    setShowWorkoutModal(null);
+  } catch (error: any) {
+    toast.error(`Failed to assign workout: ${error.message}`);
+  }
+};
+
   async function loadWeightHistory(memberId: string) {
     try {
       setError(null);
       const { data: history, error } = await supabase
-        .from("weight_history")
-        .select("id, member_id, weight_kg, bmi, recorded_at")
-        .eq("member_id", memberId)
-        .order("recorded_at", { ascending: true });
+        .from('weight_history')
+        .select('id, member_id, weight_kg, bmi, recorded_at')
+        .eq('member_id', memberId)
+        .order('recorded_at', { ascending: true });
 
       if (error) {
-        console.error("Weight history error:", error);
         throw error;
       }
 
       const chartData: WeightChartData[] = (history || []).map(h => ({
-        date: new Date(h.recorded_at).toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric' 
+        date: new Date(h.recorded_at).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
         }),
         weight: h.weight_kg,
         bmi: h.bmi || undefined,
@@ -276,18 +264,15 @@ export default function TrainerDashboardPage() {
       setWeightHistory(history || []);
       setChartData(chartData);
     } catch (err: any) {
-      console.error("Error loading weight history:", err);
-      setError("Failed to load weight history: " + err.message);
+      setError('Failed to load weight history: ' + err.message);
     }
   }
 
   async function handleUpdateWeight() {
     if (!selectedMember || !newWeight) {
-      setError("Please enter a weight");
+      setError('Please enter a weight');
       return;
     }
-
-    console.log("Updating weight for member_user_id:", selectedMember.user_id);
 
     setUpdating(selectedMember.user_id);
     setError(null);
@@ -295,20 +280,20 @@ export default function TrainerDashboardPage() {
     try {
       const weightNum = parseFloat(newWeight);
       if (isNaN(weightNum) || weightNum < 30 || weightNum > 200) {
-        setError("Please enter a valid weight between 30-200 kg");
+        setError('Please enter a valid weight between 30-200 kg');
         return;
       }
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        throw new Error("Authentication required");
+        throw new Error('Authentication required');
       }
 
-      const response = await fetch("/api/trainer/update-weight", {
-        method: "POST",
+      const response = await fetch('/api/trainer/update-weight', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           member_user_id: selectedMember.user_id,
@@ -319,8 +304,7 @@ export default function TrainerDashboardPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        console.error("API error response:", result);
-        throw new Error(result.error || "Failed to update weight");
+        throw new Error(result.error || 'Failed to update weight');
       }
 
       setMembers(prev =>
@@ -340,13 +324,11 @@ export default function TrainerDashboardPage() {
       );
 
       setShowWeightModal(false);
-      setNewWeight("");
+      setNewWeight('');
       setSelectedMember(null);
-      alert("Weight updated successfully!");
-
+      toast.success('Weight updated successfully');
     } catch (err: any) {
-      console.error("Error updating weight:", err.message);
-      setError(err.message || "Failed to update weight");
+      setError(err.message || 'Failed to update weight');
     } finally {
       setUpdating(null);
     }
@@ -354,7 +336,7 @@ export default function TrainerDashboardPage() {
 
   const openWeightModal = (member: Member) => {
     setSelectedMember(member);
-    setNewWeight((member.latest_weight ?? member.weight_kg ?? "").toString());
+    setNewWeight((member.latest_weight ?? member.weight_kg ?? '').toString());
     setShowWeightModal(true);
     setError(null);
   };
@@ -365,10 +347,20 @@ export default function TrainerDashboardPage() {
     setShowChartModal(true);
   };
 
+  const openWorkoutModal = (member: Member) => {
+    if (!member.email) {
+      toast.error('No email found for this member');
+      return;
+    }
+    setSelectedMember(member);
+    setShowWorkoutModal(member.user_id);
+  };
+
   const closeModals = () => {
     setShowWeightModal(false);
     setShowChartModal(false);
-    setNewWeight("");
+    setShowWorkoutModal(null);
+    setNewWeight('');
     setSelectedMember(null);
     setError(null);
     setWeightHistory([]);
@@ -386,7 +378,7 @@ export default function TrainerDashboardPage() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <motion.div
           animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
         >
           <Loader2 className="h-8 w-8 text-blue-600" />
         </motion.div>
@@ -400,7 +392,7 @@ export default function TrainerDashboardPage() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6 p-6 bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen mt-16"
     >
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between"
@@ -476,12 +468,12 @@ export default function TrainerDashboardPage() {
                             <div className="flex items-center">
                               <Scale className="h-4 w-4 mr-2 text-gray-400" />
                               <span className="font-semibold">
-                                {member.latest_weight ?? member.weight_kg ?? "—"} kg
+                                {member.latest_weight ?? member.weight_kg ?? '—'} kg
                               </span>
                             </div>
                             {weightChange !== null && (
-                              <Badge 
-                                variant="secondary" 
+                              <Badge
+                                variant="secondary"
                                 className={`text-xs ${
                                   changeValue >= 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                                 }`}
@@ -497,55 +489,50 @@ export default function TrainerDashboardPage() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge 
-                            variant={member.latest_bmi ? "default" : "secondary"}
-                            className={member.latest_bmi ? "bg-blue-100 text-blue-800" : ""}
+                          <Badge
+                            variant={member.latest_bmi ? 'default' : 'secondary'}
+                            className={member.latest_bmi ? 'bg-blue-100 text-blue-800' : ''}
                           >
-                            {member.latest_bmi ?? member.bmi ?? "—"}
+                            {member.latest_bmi ?? member.bmi ?? '—'}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center">
                             <Ruler className="h-4 w-4 mr-2 text-gray-400" />
                             <span className="text-sm">
-                              {member.height_cm ? `${member.height_cm} cm` : "—"}
+                              {member.height_cm ? `${member.height_cm} cm` : '—'}
                             </span>
                           </div>
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className="capitalize max-w-[120px] truncate">
-                            {member.goal ?? "—"}
+                            {member.goal ?? '—'}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="text-sm text-gray-500">
-                            {member.latest_updated ? 
-                              formatDistanceToNowStrict(new Date(member.latest_updated)) + " ago" : 
-                              "Never"
-                            }
+                            {member.latest_updated
+                              ? formatDistanceToNowStrict(new Date(member.latest_updated)) + ' ago'
+                              : 'Never'}
                           </div>
                         </TableCell>
                         <TableCell className="text-right space-x-2">
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
                             onClick={() => router.push(`/member/${member.user_id}`)}
                             title="View Member Dashboard"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Dialog 
-                            open={showChartModal && selectedMember?.user_id === member.user_id} 
+                          <Dialog
+                            open={showChartModal && selectedMember?.user_id === member.user_id}
                             onOpenChange={(open) => {
                               if (!open) closeModals();
                             }}
                           >
                             <DialogTrigger asChild>
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                onClick={() => openChartModal(member)}
-                              >
+                              <Button size="sm" variant="outline" onClick={() => openChartModal(member)}>
                                 Chart
                               </Button>
                             </DialogTrigger>
@@ -562,37 +549,29 @@ export default function TrainerDashboardPage() {
                                     <ResponsiveContainer width="100%" height="100%">
                                       <LineChart data={chartData}>
                                         <CartesianGrid strokeDasharray="3 3" />
-                                        <XAxis 
-                                          dataKey="date" 
-                                          stroke="#888" 
-                                          fontSize={12}
-                                        />
-                                        <YAxis 
-                                          stroke="#888" 
-                                          fontSize={12}
-                                          domain={['dataMin', 'dataMax']}
-                                        />
-                                        <Tooltip 
+                                        <XAxis dataKey="date" stroke="#888" fontSize={12} />
+                                        <YAxis stroke="#888" fontSize={12} domain={['dataMin', 'dataMax']} />
+                                        <Tooltip
                                           contentStyle={{
                                             backgroundColor: 'white',
                                             border: '1px solid #e5e7eb',
-                                            borderRadius: '8px'
+                                            borderRadius: '8px',
                                           }}
                                         />
                                         <Legend />
-                                        <Line 
-                                          type="monotone" 
-                                          dataKey="weight" 
-                                          stroke="#3b82f6" 
+                                        <Line
+                                          type="monotone"
+                                          dataKey="weight"
+                                          stroke="#3b82f6"
                                           strokeWidth={3}
                                           name="Weight (kg)"
                                           dot={{ fill: '#3b82f6', strokeWidth: 2 }}
                                         />
                                         {chartData.some(d => d.bmi) && (
-                                          <Line 
-                                            type="monotone" 
-                                            dataKey="bmi" 
-                                            stroke="#10b981" 
+                                          <Line
+                                            type="monotone"
+                                            dataKey="bmi"
+                                            stroke="#10b981"
                                             strokeWidth={2}
                                             strokeDasharray="5 5"
                                             name="BMI"
@@ -611,22 +590,18 @@ export default function TrainerDashboardPage() {
                                     </p>
                                   </div>
                                 )}
-                                
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                   <div className="p-3 bg-gray-50 rounded-lg">
                                     <div className="font-medium text-gray-900">Total Records</div>
-                                    <div className="text-2xl font-bold text-blue-600">
-                                      {weightHistory.length}
-                                    </div>
+                                    <div className="text-2xl font-bold text-blue-600">{weightHistory.length}</div>
                                   </div>
                                   <div className="p-3 bg-gray-50 rounded-lg">
                                     <div className="font-medium text-gray-900">Current Weight</div>
                                     <div className="text-2xl font-bold text-green-600">
-                                      {selectedMember?.latest_weight ?? "—"} kg
+                                      {selectedMember?.latest_weight ?? '—'} kg
                                     </div>
                                   </div>
                                 </div>
-
                                 <div className="flex justify-end space-x-2 pt-4">
                                   <Button type="button" variant="outline" onClick={closeModals}>
                                     Close
@@ -635,16 +610,15 @@ export default function TrainerDashboardPage() {
                               </div>
                             </DialogContent>
                           </Dialog>
-
-                          <Dialog 
+                          <Dialog
                             open={showWeightModal && selectedMember?.user_id === member.user_id}
                             onOpenChange={(open) => {
                               if (!open) closeModals();
                             }}
                           >
                             <DialogTrigger asChild>
-                              <Button 
-                                size="sm" 
+                              <Button
+                                size="sm"
                                 variant="default"
                                 onClick={() => openWeightModal(member)}
                                 disabled={updating === member.user_id}
@@ -655,7 +629,7 @@ export default function TrainerDashboardPage() {
                                     Updating...
                                   </>
                                 ) : (
-                                  " Update"
+                                  'Update'
                                 )}
                               </Button>
                             </DialogTrigger>
@@ -687,7 +661,6 @@ export default function TrainerDashboardPage() {
                                     Enter weight between 30-200 kg
                                   </div>
                                 </div>
-                                
                                 {selectedMember?.height_cm && (
                                   <div className="p-3 bg-blue-50 rounded-md border">
                                     <div className="text-sm text-blue-800 mb-1">
@@ -695,7 +668,7 @@ export default function TrainerDashboardPage() {
                                     </div>
                                     {newWeight && (
                                       <div className="text-sm text-blue-800">
-                                        <strong>Estimated BMI:</strong> 
+                                        <strong>Estimated BMI:</strong>
                                         {(() => {
                                           const weightNum = parseFloat(newWeight);
                                           if (!isNaN(weightNum) && selectedMember.height_cm) {
@@ -703,29 +676,22 @@ export default function TrainerDashboardPage() {
                                             const calculatedBmi = Number((weightNum / (h_m * h_m)).toFixed(2));
                                             return ` ${calculatedBmi}`;
                                           }
-                                          return " —";
+                                          return ' —';
                                         })()}
                                       </div>
                                     )}
                                   </div>
                                 )}
-
                                 {error && (
                                   <div className="text-red-600 text-sm p-2 bg-red-50 rounded-md border">
                                     {error}
                                   </div>
                                 )}
-
                                 <div className="flex justify-end space-x-2 pt-4">
-                                  <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    onClick={closeModals}
-                                    disabled={!!updating}
-                                  >
+                                  <Button type="button" variant="outline" onClick={closeModals} disabled={!!updating}>
                                     Cancel
                                   </Button>
-                                  <Button 
+                                  <Button
                                     onClick={handleUpdateWeight}
                                     disabled={!newWeight || updating === selectedMember?.user_id}
                                   >
@@ -735,11 +701,30 @@ export default function TrainerDashboardPage() {
                                         Saving...
                                       </>
                                     ) : (
-                                      "Update Weight"
+                                      'Update Weight'
                                     )}
                                   </Button>
                                 </div>
                               </div>
+                            </DialogContent>
+                          </Dialog>
+                          <Dialog
+                            open={showWorkoutModal === member.user_id}
+                            onOpenChange={(open) => {
+                              if (!open) closeModals();
+                            }}
+                          >
+                            <DialogTrigger asChild>
+                              <Button size="sm" variant="outline" onClick={() => openWorkoutModal(member)}>
+                                Assign Workout
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-3xl">
+                              <DialogHeader>
+                                <DialogTitle>Assign New Workout to {member.name}</DialogTitle>
+                                <DialogDescription>Create and assign a workout plan to this member.</DialogDescription>
+                              </DialogHeader>
+                              <WorkoutCreationForm onSubmit={handleCreateWorkout} assignedTo={member.email ?? ''} onClose={() => setShowWorkoutModal(null)} />
                             </DialogContent>
                           </Dialog>
                         </TableCell>
