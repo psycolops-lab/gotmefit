@@ -5,7 +5,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle,  DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,10 +21,10 @@ import toast, { Toaster } from "react-hot-toast";
 import PlanExpirationReminder from "@/components/PlanExpirationReminder";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PieChart, Pie, Cell } from 'recharts';
+
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DonutChart } from '@/components/DonutChart';
-import { Check, X } from 'lucide-react';
+
 import WorkoutTracker from '@/components/WorkoutTracker';
 
 type MemberProfile = {
@@ -85,10 +85,10 @@ type Meal = {
   items: MealItem[];
 };
 
-type DietChartData = {
-  date: string;
-  completedMeals: number;
-};
+// type DietChartData = {
+//   date: string;
+//   completedMeals: number;
+// };
 interface WorkoutPlan {
   id: string;
   assigned_to: string;
@@ -102,7 +102,7 @@ export default function MemberDashboardPage() {
   const router = useRouter();
   const params = useParams();
   const memberId = params.memberID as string;
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  // const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [profile, setProfile] = useState<MemberProfile | null>(null);
   const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
   const [galleryPhotos, setGalleryPhotos] = useState<GalleryPhoto[]>([]);
@@ -133,8 +133,8 @@ export default function MemberDashboardPage() {
   const [todayMealStatus, setTodayMealStatus] = useState<{ [key: string]: boolean }>({});
   const [userRole, setUserRole] = useState<'member' | 'trainer' | 'nutritionist' | 'admin' | null>(null);
   const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
-const [timeRange, setTimeRange] = useState<string>('7_days');
-const [customValue, setCustomValue] = useState<string>('');
+// const [timeRange, setTimeRange] = useState<string>('7_days');
+// const [customValue, setCustomValue] = useState<string>('');
 const [customUnit, setCustomUnit] = useState<string>('days');
   const [newDietPlan, setNewDietPlan] = useState<Meal[]>([
     { name: "Meal 1", items: [{ name: "", quantity: "" }] },
@@ -144,7 +144,7 @@ const [customUnit, setCustomUnit] = useState<string>('days');
 const [customNumber, setCustomNumber] = useState('1');
 const [currentWorkout, setCurrentWorkout] = useState<any[]>([]);
 const [latestPlan, setLatestPlan] = useState<any>(null);
-
+const [isAssignedTrainer, setIsAssignedTrainer] = useState(false);
 const rangeOptions = [
   { value: 'last_1_days', label: 'Last 1 day' },
   { value: 'last_3_days', label: 'Last 3 days' },
@@ -587,6 +587,27 @@ useEffect(() => {
     fetchWorkoutHistory(rangeToFetch);
   }
 }, [selectedRange, customNumber, customUnit, userRole, memberId]);
+
+useEffect(() => {
+  const checkIfAssignedTrainer = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      const { data, error } = await supabase
+        .from('member_profiles')
+        .select('assigned_trainer_id')
+        .eq('user_id', memberId)
+        .single();
+
+      if (!error && data && data.assigned_trainer_id === session.user.id) {
+        setIsAssignedTrainer(true);
+      }
+    }
+  };
+
+  if (!isOwnProfile) {  // Only check if not own profile
+    checkIfAssignedTrainer();
+  }
+}, [memberId, isOwnProfile]);
 
 
   // Modified weight extraction to use member_profiles when weight_history is empty
@@ -2044,7 +2065,7 @@ if (!response.ok) {
         </ScrollArea>
       )}
     </div>
-{showPlanSection && isOwnProfile &&  (
+{showPlanSection && (isOwnProfile || isAssignedTrainer) &&  (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}

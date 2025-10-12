@@ -1,5 +1,5 @@
 "use client";
-import PlanExpirationReminder from "@/components/PlanExpirationReminder";
+
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
@@ -13,9 +13,7 @@ import {
   Users,
   UserCheck,
   Utensils,
-  TrendingUp,
   Mail,
-  Phone,
   Star,
   MoreHorizontal,
   Eye,

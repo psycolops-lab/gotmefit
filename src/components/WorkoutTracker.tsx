@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Check, X, Dumbbell, Clock, Target } from 'lucide-react';
+import { Check, X, Dumbbell, Clock, Target, Play, Pause, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import toast from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
 
 interface WorkoutTrackerProps {
   latestPlan: any;
@@ -16,15 +16,14 @@ interface WorkoutTrackerProps {
 
 export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerProps) {
   const [currentWorkout, setCurrentWorkout] = useState<any[]>([]);
+  const [timers, setTimers] = useState<{[key: number]: {running: boolean, remaining: number}}>({});
+  const intervalsRef = useRef<{[key: number]: NodeJS.Timeout | null}>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const loadWorkoutData = async () => {
       if (!latestPlan?.plan) return;
       
-      console.log('WorkoutTracker - latestPlan:', latestPlan);
-      
-      // Parse the plan data - handle both string and object formats
       let planData;
       try {
         if (typeof latestPlan.plan === 'string') {
@@ -37,15 +36,10 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
         return;
       }
       
-      console.log('WorkoutTracker - parsed planData:', planData);
-      
       const planArray = Array.isArray(planData) 
         ? planData 
         : planData?.exercises || [];
       
-      console.log('WorkoutTracker - planArray:', planArray);
-      
-      // Check if there's existing workout history for today
       const today = new Date().toISOString().split('T')[0];
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -60,14 +54,44 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
           .maybeSingle();
         
         if (todayHistory?.workout) {
-          console.log('WorkoutTracker - using existing history:', todayHistory.workout);
-          setCurrentWorkout(todayHistory.workout);
+          const updatedWorkout = todayHistory.workout.map((ex: any) => {
+            if (ex.sets) {
+              return {
+                ...ex,
+                sets: ex.sets.map((set: any) => ({
+                  ...set,
+                  completed: set.completed ?? false,
+                  marked: set.marked ?? 0
+                }))
+              };
+            } else {
+              return {
+                ...ex,
+                completed: ex.completed ?? false,
+                marked: ex.marked ?? 0
+              };
+            }
+          });
+          setCurrentWorkout(updatedWorkout);
         } else {
-          const initialized = planArray.map((ex: any) => ({
-            ...ex,
-            sets: ex.sets ? ex.sets.map((set: any) => ({ ...set, completed: false })) : []
-          }));
-          console.log('WorkoutTracker - initialized workout:', initialized);
+          const initialized = planArray.map((ex: any) => {
+            if (ex.sets) {
+              return {
+                ...ex,
+                sets: ex.sets.map((set: any) => ({
+                  ...set,
+                  completed: false,
+                  marked: 0
+                }))
+              };
+            } else {
+              return {
+                ...ex,
+                completed: false,
+                marked: 0
+              };
+            }
+          });
           setCurrentWorkout(initialized);
         }
       }
@@ -76,14 +100,81 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
     loadWorkoutData();
   }, [latestPlan]);
 
-  const handleToggleCompletion = async (exerciseIndex: number, setIndex: number) => {
+  useEffect(() => {
+    return () => {
+      Object.values(intervalsRef.current).forEach(interval => {
+        if (interval) clearInterval(interval);
+      });
+    };
+  }, []);
+
+  const startTimer = (exerciseIndex: number, initialDuration: number) => {
+    const currentTimer = timers[exerciseIndex] ?? {};
+    if (currentTimer.running) return;
+
+    let remaining = currentTimer.remaining ?? initialDuration * 60;
+    if (remaining <= 0) remaining = initialDuration * 60;
+
+    setTimers(prev => ({ ...prev, [exerciseIndex]: { running: true, remaining } }));
+
+    const interval = setInterval(() => {
+      setTimers(prev => {
+        const timer = prev[exerciseIndex];
+        if (!timer) return prev;
+
+        const newRemaining = timer.remaining - 1;
+        if (newRemaining <= 0) {
+          clearInterval(interval);
+          intervalsRef.current[exerciseIndex] = null;
+          toast.success(`${currentWorkout[exerciseIndex].name} timer completed!`);
+          return { ...prev, [exerciseIndex]: { running: false, remaining: 0 } };
+        }
+
+        return { ...prev, [exerciseIndex]: { running: true, remaining: newRemaining } };
+      });
+    }, 1000);
+
+    intervalsRef.current[exerciseIndex] = interval;
+  };
+
+  const pauseTimer = (exerciseIndex: number) => {
+    if (intervalsRef.current[exerciseIndex]) {
+      clearInterval(intervalsRef.current[exerciseIndex]);
+      intervalsRef.current[exerciseIndex] = null;
+    }
+    setTimers(prev => {
+      const timer = prev[exerciseIndex];
+      if (!timer) return prev;
+      return { ...prev, [exerciseIndex]: { ...timer, running: false } };
+    });
+  };
+
+  const resetTimer = (exerciseIndex: number) => {
+    if (intervalsRef.current[exerciseIndex]) {
+      clearInterval(intervalsRef.current[exerciseIndex]);
+      intervalsRef.current[exerciseIndex] = null;
+    }
+    setTimers(prev => {
+      const timer = prev[exerciseIndex];
+      if (!timer) return prev;
+      return { ...prev, [exerciseIndex]: { running: false, remaining: currentWorkout[exerciseIndex].duration_minutes * 60 } };
+    });
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleMarkSet = async (exerciseIndex: number, setIndex: number, success: boolean) => {
     const updatedWorkout = currentWorkout.map((ex: any, exIdx: number) => {
       if (exIdx === exerciseIndex) {
         return {
           ...ex,
-          sets: ex.sets.map((set: any, setIdx: number) => {
-            if (setIdx === setIndex) {
-              return { ...set, completed: !set.completed };
+          sets: ex.sets.map((set: any, sIdx: number) => {
+            if (sIdx === setIndex) {
+              return { ...set, completed: success, marked: 1 };
             }
             return set;
           })
@@ -92,6 +183,19 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
       return ex;
     });
 
+    setCurrentWorkout(updatedWorkout);
+    await saveWorkoutProgress(updatedWorkout);
+  };
+
+  const handleMarkExercise = async (exerciseIndex: number, success: boolean) => {
+    const updatedWorkout = currentWorkout.map((ex: any, exIdx: number) => {
+      if (exIdx === exerciseIndex) {
+        return { ...ex, completed: success, marked: 1 };
+      }
+      return ex;
+    });
+
+    pauseTimer(exerciseIndex);
     setCurrentWorkout(updatedWorkout);
     await saveWorkoutProgress(updatedWorkout);
   };
@@ -120,11 +224,10 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        toast.error(`Failed to save progress: ${errorData.error || 'Unknown error'}`);
-      } else {
-        toast.success('Progress saved!');
+        throw new Error('Failed to save progress');
       }
+
+      toast.success('Progress saved!');
     } catch (error: any) {
       toast.error(`Failed to save progress: ${error.message}`);
     } finally {
@@ -132,24 +235,23 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
     }
   };
 
-  // Calculate workout progress
   const calculateProgress = () => {
     if (currentWorkout.length === 0) return 0;
     
-    let totalSets = 0;
-    let completedSets = 0;
+    let totalItems = 0;
+    let completedItems = 0;
     
     currentWorkout.forEach((exercise: any) => {
       if (exercise.sets && exercise.sets.length > 0) {
-        totalSets += exercise.sets.length;
-        completedSets += exercise.sets.filter((set: any) => set.completed).length;
+        totalItems += exercise.sets.length;
+        completedItems += exercise.sets.filter((set: any) => set.completed === true).length;
       } else if (exercise.duration_minutes) {
-        totalSets += 1;
-        if (exercise.completed) completedSets += 1;
+        totalItems += 1;
+        if (exercise.completed === true) completedItems += 1;
       }
     });
     
-    return totalSets > 0 ? Math.round((completedSets / totalSets) * 100) : 0;
+    return totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
   };
 
   const progress = calculateProgress();
@@ -160,7 +262,7 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
         <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100">
           <CardTitle className="flex items-center gap-2">
             <Dumbbell className="h-5 w-5 text-blue-600" />
-            Today's Workout
+            Today&apos;s Workout
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
@@ -180,7 +282,7 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Dumbbell className="h-5 w-5 text-blue-600" />
-            Today's Workout
+            Today&apos;s Workout
           </CardTitle>
           <Badge variant="secondary" className="bg-blue-100 text-blue-800">
             {progress}% Complete
@@ -196,93 +298,215 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
       </CardHeader>
       <CardContent className="pt-6 space-y-6">
         {currentWorkout.map((exercise: any, exerciseIndex: number) => {
+          const timer = timers[exerciseIndex] || {};
+          const initialRemaining = exercise.duration_minutes ? exercise.duration_minutes * 60 : 0;
+          const currentRemaining = timer.remaining ?? initialRemaining;
+          const isRunning = timer.running;
+          const isPaused = currentRemaining > 0 && currentRemaining < initialRemaining && !isRunning;
+          const isCompleted = currentRemaining === 0 && !isRunning;
+          const isMarked = exercise.marked === 1 || (exercise.sets && exercise.sets.every((set: any) => set.marked === 1));
           const exerciseCompleted = exercise.sets 
-            ? exercise.sets.every((set: any) => set.completed)
-            : exercise.completed;
-          
+            ? exercise.sets.every((set: any) => set.completed === true)
+            : exercise.completed === true;
+
           return (
-            <div key={exerciseIndex} className="border rounded-xl p-4 bg-gradient-to-r from-gray-50 to-gray-100/50">
+            <div 
+              key={exerciseIndex} 
+              className={`border rounded-xl p-4 transition-all duration-200 ${
+                isMarked 
+                  ? exerciseCompleted 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-red-50 border-red-200' 
+                  : 'bg-gradient-to-r from-gray-50 to-gray-100/50 border-gray-200'
+              }`}
+            >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <Target className="h-4 w-4 text-blue-600" />
-                  {exercise.name}
-                </h3>
-                {exerciseCompleted && (
-                  <Badge className="bg-green-100 text-green-800 border-green-200">
-                    <Check className="h-3 w-3 mr-1" />
-                    Completed
+                <div className="flex items-center gap-2 flex-1">
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <Target className="h-4 w-4 text-blue-600" />
+                    {exercise.name}
+                  </h3>
+                  {exercise.duration_minutes && (
+                    <span className="ml-4 text-sm text-muted-foreground flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      {isRunning || isPaused || isCompleted 
+                        ? `${formatTime(currentRemaining)} / ${exercise.duration_minutes} min`
+                        : `${exercise.duration_minutes} minutes`}
+                    </span>
+                  )}
+                </div>
+                {isMarked && (
+                  <Badge 
+                    className={`${
+                      exerciseCompleted 
+                        ? 'bg-green-100 text-green-800 border-green-200' 
+                        : 'bg-red-100 text-red-800 border-red-200'
+                    }`}
+                  >
+                    {exerciseCompleted ? <Check className="h-3 w-3 mr-1" /> : <X className="h-3 w-3 mr-1" />}
+                    {exerciseCompleted ? 'Completed' : 'Failed'}
                   </Badge>
                 )}
               </div>
               
               {exercise.sets && exercise.sets.length > 0 ? (
                 <div className="space-y-3">
-                  {exercise.sets.map((set: any, setIndex: number) => (
-                    <div key={setIndex} className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
-                      set.completed 
-                        ? 'bg-green-50 border-green-200 shadow-sm' 
-                        : 'bg-white border-gray-200 hover:border-blue-200'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                          set.completed 
-                            ? 'bg-green-500 text-white' 
-                            : 'bg-gray-200 text-gray-600'
-                        }`}>
-                          {setIndex + 1}
+                  {exercise.sets.map((set: any, setIndex: number) => {
+                    const isSetMarked = set.marked === 1;
+                    const isSetCompleted = set.completed === true;
+
+                    return (
+                      <div 
+                        key={setIndex} 
+                        className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
+                          isSetMarked
+                            ? isSetCompleted
+                              ? 'bg-green-50 border-green-200'
+                              : 'bg-red-50 border-red-200'
+                            : 'bg-white border-gray-200 hover:border-blue-200'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                              isSetMarked
+                                ? isSetCompleted
+                                  ? 'bg-green-500 text-white'
+                                  : 'bg-red-500 text-white'
+                                : 'bg-gray-200 text-gray-600'
+                            }`}
+                          >
+                            {setIndex + 1}
+                          </div>
+                          <span className="font-medium">
+                            {set.reps} reps @ {set.weight} kg
+                          </span>
                         </div>
-                        <span className="font-medium">
-                          {set.reps} reps @ {set.weight} kg
-                        </span>
+                        {isSetMarked ? (
+                          <div className="flex items-center gap-2">
+                            {isSetCompleted ? (
+                              <Check className="h-4 w-4 text-green-600" />
+                            ) : (
+                              <X className="h-4 w-4 text-red-600" />
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleMarkSet(exerciseIndex, setIndex, true)}
+                              disabled={loading}
+                              className="hover:bg-green-50 border-green-200 hover:border-green-300"
+                              title="Mark as completed"
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleMarkSet(exerciseIndex, setIndex, false)}
+                              disabled={loading}
+                              className="hover:bg-red-50 border-red-200 hover:border-red-300"
+                              title="Mark as failed"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant={set.completed ? "default" : "outline"}
-                          onClick={() => handleToggleCompletion(exerciseIndex, setIndex)}
-                          disabled={loading}
-                          className={`transition-all duration-200 ${
-                            set.completed 
-                              ? "bg-green-500 hover:bg-green-600 text-white shadow-sm" 
-                              : "hover:bg-green-50 border-green-200 hover:border-green-300"
-                          }`}
-                          title={set.completed ? "Mark as incomplete" : "Mark as completed"}
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : exercise.duration_minutes ? (
                 <div className="flex items-center justify-between p-3 rounded-lg border bg-white">
                   <div className="flex items-center gap-3">
-                    <Clock className="h-4 w-4 text-blue-600" />
-                    <span className="font-medium">
-                      Duration: {exercise.duration_minutes} minutes
-                    </span>
+                    {exercise.marked !== 1 && (
+                      <>
+                        {isRunning ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => pauseTimer(exerciseIndex)}
+                            disabled={loading}
+                            className="hover:bg-blue-50 border-blue-200 hover:border-blue-300"
+                            title="Pause timer"
+                          >
+                            <Pause className="h-4 w-4 text-blue-600" />
+                          </Button>
+                        ) : (isPaused || isCompleted) ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => startTimer(exerciseIndex, exercise.duration_minutes)}
+                            disabled={loading}
+                            className="hover:bg-blue-50 border-blue-200 hover:border-blue-300"
+                            title="Resume timer"
+                          >
+                            <Play className="h-4 w-4 text-blue-600" />
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => startTimer(exerciseIndex, exercise.duration_minutes)}
+                            disabled={loading}
+                            className="hover:bg-blue-50 border-blue-200 hover:border-blue-300"
+                            title="Start timer"
+                          >
+                            <Clock className="h-4 w-4 text-blue-600" />
+                            <span className="ml-4 text-sm text-muted-foreground flex items-center gap-2">
+                                  {exercise.duration_minutes} minutes
+                            </span>
+                          </Button>
+                        )}
+                        {(isPaused || isCompleted) && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => resetTimer(exerciseIndex)}
+                            disabled={loading}
+                            className="hover:bg-gray-50 border-gray-200 hover:border-gray-300"
+                            title="Reset timer"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </>
+                    )}
                   </div>
-                  <Button
-                    size="sm"
-                    variant={exercise.completed ? "default" : "outline"}
-                    onClick={() => {
-                      const updatedWorkout = currentWorkout.map((ex: any, exIdx: number) => {
-                        if (exIdx === exerciseIndex) {
-                          return { ...ex, completed: !ex.completed };
-                        }
-                        return ex;
-                      });
-                      setCurrentWorkout(updatedWorkout);
-                      saveWorkoutProgress(updatedWorkout);
-                    }}
-                    disabled={loading}
-                    className={exercise.completed 
-                      ? "bg-green-500 hover:bg-green-600 text-white" 
-                      : "hover:bg-green-50 border-green-200"
-                    }
-                  >
-                    {exercise.completed ? <Check className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
-                  </Button>
+                  {exercise.marked !== 1 ? (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleMarkExercise(exerciseIndex, true)}
+                        disabled={loading}
+                        className="hover:bg-green-50 border-green-200 hover:border-green-300"
+                        title="Mark as completed"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleMarkExercise(exerciseIndex, false)}
+                        disabled={loading}
+                        className="hover:bg-red-50 border-red-200 hover:border-red-300"
+                        title="Mark as failed"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      {exercise.completed ? (
+                        <Check className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <X className="h-4 w-4 text-red-600" />
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="text-sm text-muted-foreground p-3 bg-gray-50 rounded-lg">
