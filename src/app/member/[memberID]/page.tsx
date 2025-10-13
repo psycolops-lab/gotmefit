@@ -23,7 +23,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { DonutChart } from '@/components/DonutChart';
+import DonutChart from '@/components/DonutChart';
+import AnimatedDonutChart from '@/components/AnimatedDonutChart';
 
 import WorkoutTracker from '@/components/WorkoutTracker';
 
@@ -158,6 +159,17 @@ const rangeOptions = [
 const handleRangeChange = (value: string) => {
   setSelectedRange(value);
 };
+  const getExerciseNames = (workout: any[]) => {
+    if (!workout || !Array.isArray(workout)) return 'No exercises recorded';
+    const names = workout.map(ex => ex.name).filter(name => name);
+    return names.length > 0 ? names.join(', ') : 'No exercises recorded';
+  };
+    const calculateOverallProgress = () => {
+    if (workoutHistory.length === 0) return 0;
+    const totalPercentage = workoutHistory.reduce((sum, item) => sum + item.completion_percentage, 0);
+    return Math.round(totalPercentage / workoutHistory.length);
+  };
+  const overallProgress = calculateOverallProgress();
 
   const goalOptions = [
     "Lose Weight",
@@ -2003,77 +2015,104 @@ if (!response.ok) {
           </Card>
         </motion.div>
       )}
-<div className="mt-6">
-      <h2 className="text-xl font-semibold mb-4">Workout Progress History</h2>
-      <div className="flex items-center mb-4">
-        <Select value={selectedRange} onValueChange={handleRangeChange}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select range" />
-          </SelectTrigger>
-          <SelectContent>
-            {rangeOptions.map(opt => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {selectedRange === 'custom' && (
-          <div className="ml-4 flex items-center">
-            <Input
-              type="number"
-              value={customNumber}
-              onChange={e => setCustomNumber(e.target.value)}
-              className="w-20 mr-2"
-              min="1"
-            />
-            <Select value={customUnit} onValueChange={setCustomUnit}>
-              <SelectTrigger className="w-[120px]">
-                <SelectValue />
+<div className="  space-y-6">
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold flex items-center gap-2">
+            {/* <Dumbbell className="h-6 w-6 text-blue-600" /> */}
+            Member Dashboard
+          </CardTitle>
+          <p className="text-muted-foreground">Track your workout progress and history</p>
+        </CardHeader>
+        <CardContent>
+          <WorkoutTracker latestPlan={latestPlan} memberId={memberId || ''} />
+        </CardContent>
+      </Card>
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-xl font-semibold">Workout Progress History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center mb-4">
+            <Select value={selectedRange} onValueChange={handleRangeChange}>
+              <SelectTrigger className="w-[180px] border-blue-200 focus:ring-blue-500">
+                <SelectValue placeholder="Select range" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="days">Days</SelectItem>
-                <SelectItem value="weeks">Weeks</SelectItem>
-                <SelectItem value="months">Months</SelectItem>
+                {rangeOptions.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            {selectedRange === 'custom' && (
+              <div className="ml-4 flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={customNumber}
+                  onChange={e => setCustomNumber(e.target.value)}
+                  className="w-20 border-blue-200 focus:ring-blue-500"
+                  min="1"
+                />
+                <Select value={customUnit} onValueChange={setCustomUnit}>
+                  <SelectTrigger className="w-[120px] border-blue-200 focus:ring-blue-500">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="days">Days</SelectItem>
+                    <SelectItem value="weeks">Weeks</SelectItem>
+                    <SelectItem value="months">Months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      {workoutHistory.length === 0 ? (
-        <p className="text-center text-gray-500">No workout history available for the selected range.</p>
-      ) : (
-        <ScrollArea className="h-[300px] w-full rounded-md border">
-          <Table>
-            <TableHeader className="sticky top-0 bg-background z-10">
-              <TableRow>
-                <TableHead>#</TableHead>
-                <TableHead>Progress</TableHead>
-                <TableHead>Date</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {workoutHistory.map((item: any, index: number) => (
-                <TableRow key={item.id}>
-                  <TableCell>{index + 1}</TableCell>
-                  <TableCell>
-                    <DonutChart percentage={item.completion_percentage} />
-                  </TableCell>
-                  <TableCell>{new Date(item.recorded_at).toLocaleDateString()}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </ScrollArea>
-      )}
+          {loading ? (
+            <p className="text-center text-gray-500">Loading...</p>
+          ) : workoutHistory.length === 0 ? (
+            <p className="text-center text-gray-500">No workout history available for the selected range.</p>
+          ) : (
+            <div className="flex gap-6">
+              {/* Left Half: Workout History Table */}
+              <div className="w-1/2">
+                <ScrollArea className="h-[300px] w-full rounded-md border border-gray-200">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-white shadow-sm">
+                      <TableRow>
+                        <TableHead className="w-[60px]">#</TableHead>
+                        <TableHead>Workout</TableHead>
+                        <TableHead>Progress</TableHead>
+                        <TableHead>Date</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {workoutHistory.map((item: any, index: number) => (
+                        <TableRow key={item.id} className="hover:bg-gray-50">
+                          <TableCell>{index + 1}</TableCell>
+                          <TableCell className="max-w-[150px] truncate">{getExerciseNames(item.workout)}</TableCell>
+                          <TableCell>
+                            <DonutChart percentage={item.completion_percentage} />
+                          </TableCell>
+                          <TableCell>{new Date(item.recorded_at).toLocaleDateString()}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              </div>
+              {/* Right Half: Overall Progress Donut Chart */}
+              <div className="w-1/2 flex flex-col items-center justify-center">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Overall Progress</h3>
+                <AnimatedDonutChart percentage={overallProgress} />
+                <p className="mt-4 text-sm text-gray-500">
+                  Average completion: {overallProgress}%
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
-{showPlanSection && (isOwnProfile || isAssignedTrainer) &&  (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.5, delay: 0.5 }}
-  >
-    <WorkoutTracker latestPlan={latestPlan} memberId={memberId} />
-  </motion.div>
-)}
+
 
       
     </motion.div>

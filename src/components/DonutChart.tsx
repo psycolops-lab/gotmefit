@@ -1,34 +1,24 @@
-// src/components/DonutChart.tsx
-export function DonutChart({ percentage }: { percentage: number }) {
-  const circ = 100;
-  const r = circ / (2 * Math.PI);
-  const greenLength = (percentage / 100) * circ;
-  const redLength = circ - greenLength;
+"use client";
 
+import { Progress } from '@/components/ui/progress';
+
+interface MiniDonutChartProps {
+  percentage: number;
+}
+
+export default function MiniDonutChart({ percentage }: MiniDonutChartProps) {
   return (
-    <svg width="40" height="40" viewBox="0 0 40 40">
-      <circle cx="20" cy="20" r={r} fill="none" stroke="#e0e0e0" strokeWidth="4" />
-      <circle
-        cx="20"
-        cy="20"
-        r={r}
-        fill="none"
-        stroke="green"
-        strokeWidth="4"
-        strokeDasharray={`${greenLength} ${circ}`}
-        transform="rotate(-90 20 20)"
-      />
-      <circle
-        cx="20"
-        cy="20"
-        r={r}
-        fill="none"
-        stroke="red"
-        strokeWidth="4"
-        strokeDasharray={`${redLength} ${circ}`}
-        strokeDashoffset={`-${greenLength}`}
-        transform="rotate(-90 20 20)"
-      />
-    </svg>
+    <div className="flex items-center gap-2">
+      <div className="relative w-10 h-10">
+        <Progress
+          value={percentage}
+          className="w-10 h-10 rounded-full"
+        />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-6 h-6 bg-white rounded-full" />
+        </div>
+      </div>
+      <span className="text-sm font-medium text-gray-700">{percentage}%</span>
+    </div>
   );
 }

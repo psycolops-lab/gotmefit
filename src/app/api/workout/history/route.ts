@@ -38,10 +38,10 @@ export async function GET(req: NextRequest) {
 
     console.log('Authenticated User:', user.id, user.email);
 
-    // Fetch workout history
+    // Fetch workout history with explicit columns
     const { data, error } = await supabase
       .from('workout_history')
-      .select('*')
+      .select('id, member_id, workout_plan_id, completion_percentage, recorded_at, workout')
       .eq('member_id', memberId)
       .order('recorded_at', { ascending: false });
 
@@ -70,7 +70,14 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    console.log('Filtered Data:', filteredData);
+    // Log workout data to verify structure
+    console.log('Filtered Workout History:', filteredData.map(item => ({
+      id: item.id,
+      recorded_at: item.recorded_at,
+      completion_percentage: item.completion_percentage,
+      workout: item.workout ? item.workout.map((ex: any) => ex.name) : []
+    })));
+
     return NextResponse.json({ history: filteredData });
   } catch (err: any) {
     console.error('Workout history API error:', err);

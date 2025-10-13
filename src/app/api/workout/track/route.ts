@@ -1,7 +1,5 @@
-// workout/track/route.ts (POST)
-import { createClient } from '@/lib/supabaseServer';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 function countBooleanLeaves(obj: any) {
   let total = 0;
@@ -23,97 +21,77 @@ function countBooleanLeaves(obj: any) {
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const token = authHeader.replace('Bearer ', '');
-  const { data: getUserData, error: tokenError } = await supabase.auth.getUser(token);
-
-  if (tokenError || !getUserData?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const user = getUserData.user;
-
-  const body = await request.json();
-  const { workoutPlanId, workout } = body ?? {};
-
-  if (!workoutPlanId || !workout) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-  }
-
-  // fetch assigned_to email (and sanity-check user exists in users table)
-  const { data: userData, error: userError } = await supabaseAdmin
-    .from('users')
-    .select('email')
-    .eq('id', user.id)
-    .single();
-
-  if (userError || !userData) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 });
-  }
-
   try {
-    // Compute completion_percentage from workout JSON
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized: Missing or invalid token' }, { status: 401 });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: tokenError } = await supabaseAdmin.auth.getUser(token);
+
+    if (tokenError || !user) {
+      return NextResponse.json({ error: 'Unauthorized: Invalid token' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { workoutPlanId, workout } = body ?? {};
+
+    if (!workoutPlanId || !workout) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Fetch user email for assigned_to field
+    const { data: userData, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('email')
+      .eq('id', user.id)
+      .single();
+
+    if (userError || !userData) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Compute completion_percentage
     const { total, trues } = countBooleanLeaves(workout);
     const completion_percentage = total > 0 ? Math.round((trues / total) * 100) : 0;
 
-    // Build today's UTC range (you can adjust if you want local-timeday)
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD (UTC)
-    const startIso = `${today}T00:00:00.000Z`;
-    const endIso = `${today}T23:59:59.999Z`;
+    // Get today's date in UTC (YYYY-MM-DD)
+    const today = new Date().toISOString().split('T')[0];
 
-    // Check for existing record for this member+plan for today
-    const { data: existingRecord, error: fetchError } = await supabaseAdmin
+    // Log input for debugging
+    console.log('Processing workout update:', {
+      member_id: user.id,
+      workout_plan_id: workoutPlanId,
+      today,
+      workout_length: workout.length,
+      completion_percentage
+    });
+
+    // Upsert workout_history entry
+    const { data, error } = await supabaseAdmin
       .from('workout_history')
-      .select('*')
-      .eq('member_id', user.id)
-      .eq('workout_plan_id', workoutPlanId)
-      .gte('recorded_at', startIso)
-      .lt('recorded_at', endIso)
-      .maybeSingle();
+      .upsert({
+        member_id: user.id,
+        workout_plan_id: workoutPlanId,
+        workout,
+        completion_percentage,
+        recorded_at: `${today}T00:00:00.000Z`,
+        updated_at: new Date().toISOString(),
+        created_by: user.id,
+        assigned_to: userData.email
+      }, {
+        onConflict: 'member_id,workout_plan_id,recorded_at'
+      })
+      .select('id')
+      .single();
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      // PGRST116 is "No rows found" for some clients, but keep defensive checks
-      throw new Error(`Failed to check existing record: ${fetchError.message}`);
+    if (error) {
+      console.error('Upsert error:', error);
+      return NextResponse.json({ error: `Failed to save workout history: ${error.message}` }, { status: 500 });
     }
 
-    if (existingRecord) {
-      // Update existing record (first record of the day already created)
-      const { error: updateError } = await supabaseAdmin
-        .from('workout_history')
-        .update({
-          workout,
-          completion_percentage,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingRecord.id);
-
-      if (updateError) {
-        throw new Error(`Failed to update workout history: ${updateError.message}`);
-      }
-    } else {
-      // Insert new record (first tracking for this plan today)
-      const { error: insertError } = await supabaseAdmin
-        .from('workout_history')
-        .insert({
-          member_id: user.id,
-          workout_plan_id: workoutPlanId,
-          workout,
-          completion_percentage,
-          created_by: user.id,
-          assigned_to: userData.email,
-          recorded_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-      if (insertError) {
-        throw new Error(`Failed to create workout history: ${insertError.message}`);
-      }
-    }
+    console.log('Upsert result:', { workout_history_id: data.id });
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
