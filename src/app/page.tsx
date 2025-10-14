@@ -11,7 +11,9 @@ export default function Home() {
   return (
     <main className="min-h-screen w-full bg-white">
       <HeroCover />
+      {/*
       <Certifications />
+      */}
       <Services />
       <EventsWorkshops />
       <Authenticity />
