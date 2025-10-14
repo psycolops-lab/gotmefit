@@ -11,7 +11,7 @@ export default function Services() {
         <h2 className="text-2xl md:text-3xl font-semibold">Services</h2>
         <p className="mt-3 max-w-3xl text-gray-600">
           Our mission is to transform 100,000 lives by making wellness accessible and achievable for everyone.
-We're building a community rooted in health, balance, and positivity. Through personalized guidance, regular follow-ups, and educational support, we're ensuring wellntos is within reach for each individual, empowering them to achieve their best-physically, mentally, and emotionally.
+          We&apos;re building a community rooted in health, balance, and positivity. Through personalized guidance, regular follow-ups, and educational support, we&apos;re ensuring wellntos is within reach for each individual, empowering them to achieve their best-physically, mentally, and emotionally.
         </p>
         <div className="mt-6">
           <button

@@ -79,7 +79,7 @@ const Authenticity: React.FC = () => {
           </h2>
           <div className="w-20 h-1 bg-blue-500 mx-auto rounded-full"></div>
           <p className="mt-6 text-lg text-gray-600 max-w-3xl mx-auto">
-            See the transformations and hear from people who've experienced our program firsthand.
+            See the transformations and hear from people who&apos;ve experienced our program firsthand.
           </p>
         </div>
 
