@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
@@ -123,18 +124,26 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 glass-effect dark:glass-effect-dark">
+    <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur supports-[backdrop-filter]:bg-blue-400/30 dark:supports-[backdrop-filter]:bg-blue-900/40 border-b border-blue-500/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Left: Logo */}
-          <div className="flex items-center space-x-2">
+          <motion.div
+            className="flex items-center space-x-2"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
             <Image src="/logo.webp" alt="Logo" width={100} height={96} />
-          </div>
-
-         
+          </motion.div>
 
           {/* Right: Toggle + Profile/Login */}
-          <div className="flex items-center space-x-4">
+          <motion.div
+            className="flex items-center space-x-2 sm:space-x-4"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.05 }}
+          >
             <ModeToggle />
 
             {loading ? (
@@ -142,9 +151,9 @@ export default function Navbar() {
             ) : role ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Avatar className="h-9 w-9 cursor-pointer border-2 border-blue-600 hover:border-blue-400 transition-colors">
+                  <Avatar className="h-9 w-9 cursor-pointer border border-border hover:shadow-sm transition-all duration-200">
                     <AvatarImage src={undefined} alt={userName ?? "User"} />
-                    <AvatarFallback className="bg-blue-600 text-white">
+                    <AvatarFallback className="bg-primary text-primary-foreground">
                       {userName ? userName.substring(0, 2).toUpperCase() : "?"}
                     </AvatarFallback>
                   </Avatar>
@@ -155,23 +164,12 @@ export default function Navbar() {
                     <p className="text-xs text-muted-foreground">{userEmail}</p>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {/* <DropdownMenuItem onClick={() => router.push("/profile")}>
-                    <User className="mr-2 h-4 w-4" />
-                    Profile
-                  </DropdownMenuItem> */}
                   <DropdownMenuItem onClick={handleDashboardClick}>
                     <BarChart3 className="mr-2 h-4 w-4" />
                     Dashboard
                   </DropdownMenuItem>
-                  {/* <DropdownMenuItem onClick={() => router.push("/settings")}>
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                  </DropdownMenuItem> */}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleLogout}
-                    className="text-red-600"
-                  >
+                  <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-700">
                     <LogOut className="mr-2 h-4 w-4" />
                     Log Out
                   </DropdownMenuItem>
@@ -180,16 +178,14 @@ export default function Navbar() {
             ) : (
               <Button
                 onClick={() => router.push("/login")}
-                className="bg-blue-600 hover:bg-blue-700 text-white"
+                className="transition-all duration-200 hover:shadow-sm"
               >
                 Login
               </Button>
             )}
-          </div>
+          </motion.div>
         </div>
       </div>
-     
     </nav>
-    
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 import Image from 'next/image';
 import { cn } from "@/lib/utils";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, Suspense, lazy } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DonutChart from '@/components/DonutChart';
 import AnimatedDonutChart from '@/components/AnimatedDonutChart';
-
+import Skeleton from 'react-loading-skeleton';
 import WorkoutTracker from '@/components/WorkoutTracker';
 
 type MemberProfile = {
@@ -324,224 +324,203 @@ useEffect(() => {
   async function load() {
     setLoading(true);
     setError(null);
+
     try {
-      // Check session
+      // ✅ Check session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session) {
-        setError('Session expired. Please log in again.');
-        router.push('/login');
+        setError("Session expired. Please log in again.");
+        router.push("/login");
         return;
       }
 
       const loggedInUserId = session.user.id;
       setIsOwnProfile(memberId === loggedInUserId);
 
-      // Fetch member profile
+      // ✅ Fetch member profile first (since everything depends on it)
       const { data: mp, error: mpErr } = await supabase
-        .from('member_profiles')
-        .select('*')
-        .eq('user_id', memberId)
+        .from("member_profiles")
+        .select("*")
+        .eq("user_id", memberId)
         .maybeSingle();
+
       if (mpErr) throw new Error(`Profile fetch error: ${mpErr.message}`);
       if (!mp) {
-        setError('Member profile not found.');
+        setError("Member profile not found.");
         return;
       }
       setProfile(mp);
 
-      // Determine viewer role
-      let viewerRole: 'member' | 'trainer' | 'nutritionist' | 'admin' = 'admin';
+      // ✅ Determine viewer role
+      let viewerRole: "member" | "trainer" | "nutritionist" | "admin" = "admin";
       if (loggedInUserId === memberId) {
-        viewerRole = 'member';
+        viewerRole = "member";
       } else if (mp.assigned_trainer_id === loggedInUserId) {
-        viewerRole = 'trainer';
+        viewerRole = "trainer";
       } else if (mp.assigned_nutritionist_id === loggedInUserId) {
-        viewerRole = 'nutritionist';
+        viewerRole = "nutritionist";
       }
       setUserRole(viewerRole);
 
-      // Fetch weight history
-      let wh: WeightHistory[] = [];
-      if (['member', 'admin', 'trainer', 'nutritionist'].includes(viewerRole)) {
-        const { data: whData, error: whErr } = await supabase
-          .from('weight_history')
-          .select('*')
-          .eq('member_id', memberId)
-          .order('recorded_at', { ascending: true });
-        if (whErr) throw new Error(`Weight history fetch error: ${whErr.message}`);
-        wh = whData as WeightHistory[];
-      }
-      setWeightHistory(wh);
+      // ✅ Prepare parallel fetches
+      const weightHistoryPromise =
+        ["member", "admin", "trainer", "nutritionist"].includes(viewerRole)
+          ? supabase
+              .from("weight_history")
+              .select("*")
+              .eq("member_id", memberId)
+              .order("recorded_at", { ascending: true })
+          : Promise.resolve({ data: [], error: null });
 
-      // Fetch gallery photos
-      let gp: GalleryPhoto[] = [];
-      if (viewerRole === 'member' || viewerRole === 'admin') {
-        const { data: gpData, error: gpErr } = await supabase
-          .from('gallery')
-          .select('id, date, photo')
-          .eq('user_id', memberId)
-          .order('date', { ascending: false });
-        if (gpErr) throw new Error(`Gallery fetch error: ${gpErr.message}`);
-        gp = gpData as GalleryPhoto[];
-      }
-      setGalleryPhotos(gp);
+      const galleryPromise =
+        viewerRole === "member" || viewerRole === "admin"
+          ? supabase
+              .from("gallery")
+              .select("id, date, photo")
+              .eq("user_id", memberId)
+              .order("date", { ascending: false })
+          : Promise.resolve({ data: [], error: null });
 
-      // Fetch diet plan and history
-      let dp: DietPlan | null = null;
+      const userPromise = supabase
+        .from("users")
+        .select("email")
+        .eq("id", memberId)
+        .single();
+
+      const trainerPromise = mp?.assigned_trainer_id
+        ? fetch(`/api/member/trainer?trainer_id=${mp.assigned_trainer_id}`).then((res) => res.json())
+        : Promise.resolve(null);
+
+      const nutritionistPromise = mp?.assigned_nutritionist_id
+        ? fetch(`/api/member/nutritionist?nutritionist_id=${mp.assigned_nutritionist_id}`).then((res) => res.json())
+        : Promise.resolve(null);
+
+      // ✅ Wait for parallel results
+      const [weightRes, galleryRes, userRes, trainerRes, nutritionistRes] = await Promise.all([
+        weightHistoryPromise,
+        galleryPromise,
+        userPromise,
+        trainerPromise,
+        nutritionistPromise,
+      ]);
+
+      // ✅ Handle Weight History
+      if (weightRes.error) throw new Error(`Weight history fetch error: ${weightRes.error.message}`);
+      setWeightHistory(weightRes.data || []);
+
+      // ✅ Handle Gallery
+      if (galleryRes.error) throw new Error(`Gallery fetch error: ${galleryRes.error.message}`);
+      setGalleryPhotos(galleryRes.data || []);
+
+      // ✅ User Email
+      const userEmail = userRes.data?.email;
+      if (!userEmail) throw new Error("User email not found.");
+
+      // ✅ Diet plan, diet history, and today's history (parallel)
+      const dietPlanPromise =
+        ["member", "admin", "nutritionist"].includes(viewerRole)
+          ? supabase
+              .from("diet")
+              .select("*")
+              .eq("user_email", userEmail)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null });
+
+      const [dpRes] = await Promise.all([dietPlanPromise]);
+
+      const dp = dpRes.data as DietPlan | null;
       let dh: DietHistory[] = [];
       let todayHistory: { intake: { [key: string]: boolean } } | null = null;
-      if (['member', 'admin', 'nutritionist'].includes(viewerRole)) {
-        const { data: userData, error: userErr } = await supabase
-          .from('users')
-          .select('email')
-          .eq('id', memberId)
-          .single();
-        if (userErr) throw new Error(`User fetch error: ${userErr.message}`);
 
-        const { data: dpData, error: dpErr } = await supabase
-          .from('diet')
-          .select('*')
-          .eq('user_email', userData.email)
-          .maybeSingle();
-        if (dpErr && dpErr.code !== 'PGRST116') {
-          throw new Error(`Diet plan fetch error: ${dpErr.message}`);
+      if (dp?.id) {
+        const [dhRes, todayRes] = await Promise.all([
+          supabase
+            .from("diet_history")
+            .select("*")
+            .eq("meal_plan_id", dp.id)
+            .order("date", { ascending: false }),
+          supabase
+            .from("diet_history")
+            .select("intake")
+            .eq("meal_plan_id", dp.id)
+            .eq("date", new Date().toISOString().split("T")[0])
+            .maybeSingle(),
+        ]);
+
+        if (dhRes.error) throw new Error(`Diet history fetch error: ${dhRes.error.message}`);
+        if (todayRes.error && todayRes.error.code !== "PGRST116") {
+          throw new Error(`Today's history fetch error: ${todayRes.error.message}`);
         }
-        dp = dpData as DietPlan;
-
-        if (dp?.id) {
-          const { data: dhData, error: dhErr } = await supabase
-            .from('diet_history')
-            .select('*')
-            .eq('meal_plan_id', dp.id)
-            .order('date', { ascending: false });
-          if (dhErr) throw new Error(`Diet history fetch error: ${dhErr.message}`);
-          dh = dhData as DietHistory[];
-
-          const today = new Date().toISOString().split('T')[0];
-          const { data: todayHistoryData, error: todayErr } = await supabase
-            .from('diet_history')
-            .select('intake')
-            .eq('meal_plan_id', dp.id)
-            .eq('date', today)
-            .maybeSingle();
-          if (todayErr && todayErr.code !== 'PGRST116') {
-            throw new Error(`Today's history fetch error: ${todayErr.message}`);
-          }
-          todayHistory = todayHistoryData;
-        }
+        dh = dhRes.data as DietHistory[];
+        todayHistory = todayRes.data;
       }
+
       setDietPlan(dp);
       setDietHistory(dh);
       setTodayMealStatus(todayHistory?.intake || {});
 
-      // Fetch workout plans and history
-      let wp: any[] = [];
-      if (['member', 'trainer', 'admin'].includes(viewerRole)) {
-        const { data: userData, error: userErr } = await supabase
-          .from('users')
-          .select('email')
-          .eq('id', memberId)
-          .single();
-        if (userErr) {
-          console.error('User Fetch Error:', userErr);
-          throw new Error(`User fetch error: ${userErr.message}`);
-        }
-
-        const { data: wpData, error: wpErr } = await supabase
-          .from('workout_plans')
-          .select('id, assigned_to, created_at, plan')
-          .eq('assigned_to', userData.email)
-          .order('created_at', { ascending: false });
-        if (wpErr) {
-          console.error('Workouts Fetch Error:', wpErr);
-          throw new Error(`Workouts fetch error: ${wpErr.message}`);
-        }
-        wp = wpData || [];
-        setWorkouts(wp);
-        console.log('Fetched workouts:', wp);
-        if (wp.length > 0) {
-          setLatestPlan(wp[0]);
-        }
-
-        // Fetch workout history
-        try {
-          console.log('Workout History Fetch - Starting:', { memberId, range: selectedRange, viewerRole });
-          const response = await fetch(`/api/workout/history?member_id=${memberId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-              },
+      // ✅ Workout Plan + History (parallel inside block)
+      if (["member", "trainer", "admin"].includes(viewerRole)) {
+        const [wpRes, workoutHistory] = await Promise.all([
+          supabase
+            .from("workout_plans")
+            .select("id, assigned_to, created_at, created_by, plan")
+            .eq("assigned_to", userEmail)
+            .order("created_at", { ascending: false }),
+          fetch(`/api/workout/history?member_id=${memberId}`, {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          }).then(async (res) => {
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({}));
+              throw new Error(`Workout history fetch error: ${err.error || "Unknown error"}`);
             }
-          );
+            return res.json();
+          }),
+        ]);
 
-          console.log('Workout History Fetch - Response:', {
-            status: response.status,
-            statusText: response.statusText,
-            ok: response.ok,
-          });
+        if (wpRes.error) throw new Error(`Workout plan fetch error: ${wpRes.error.message}`);
+        const wp = wpRes.data || [];
+        setWorkouts(wp);
+        console.log("Fetched workouts:", wp);
+        if (wp.length > 0) setLatestPlan(wp[0]);
 
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            console.error('Workout History Fetch Error:', {
-              status: response.status,
-              error: errorData.error || 'Unknown error',
-              details: errorData.details || 'No details',
-            });
-            toast.error(`Failed to load workout history: ${errorData.error || 'Unknown error'}`);
-            setWorkoutHistory([]);
-            return;
-          }
-
-          const { history } = await response.json();
-          console.log('Fetched workout history:', history);
-          if (!history || history.length === 0) {
-            console.warn('Workout History Fetch Warning: Empty history returned', { memberId, range: selectedRange });
-          }
-          setWorkoutHistory(history || []);
-        } catch (err: any) {
-          console.error('Workout History Fetch Failed:', {
-            message: err.message,
-            stack: err.stack,
-          });
-          toast.error(`Failed to load workout history: ${err.message}`);
-          setWorkoutHistory([]);
-        }
+        const history = workoutHistory.history || [];
+        setWorkoutHistory(history);
+        console.log("Fetched workout history:", history);
       }
 
-      // Check upload eligibility
+      // ✅ Upload Eligibility
       if (loggedInUserId === memberId) {
-        const latestPhoto = gp[0];
-        const canUpload = !latestPhoto || isAfter(new Date(), addDays(new Date(latestPhoto.date), 7));
+        const latestPhoto = galleryRes.data?.[0];
+        const canUpload =
+          !latestPhoto || isAfter(new Date(), addDays(new Date(latestPhoto.date), 7));
         setCanUploadPhoto(canUpload);
       }
 
-      // Fetch trainer
-      if (mp?.assigned_trainer_id) {
-        const res = await fetch(`/api/member/trainer?trainer_id=${mp.assigned_trainer_id}`);
-        const json = await res.json();
-        if (json.trainer_name) {
-          setTrainer({ full_name: json.trainer_name });
-        }
+      // ✅ Trainer & Nutritionist
+      if (trainerRes?.trainer_name) {
+        setTrainer({ full_name: trainerRes.trainer_name });
+      }
+      if (nutritionistRes?.nutritionist_name) {
+        setNutritionist({ full_name: nutritionistRes.nutritionist_name });
       }
 
-      // Fetch nutritionist
-      if (mp?.assigned_nutritionist_id) {
-        const res = await fetch(`/api/member/nutritionist?nutritionist_id=${mp.assigned_nutritionist_id}`);
-        const json = await res.json();
-        if (json.nutritionist_name) {
-          setNutritionist({ full_name: json.nutritionist_name });
-        }
-      }
-
-      // Show setup modal
+      // ✅ Setup Modal
       if (
         loggedInUserId === memberId &&
-        (!mp?.height_cm || !mp?.weight_kg || !mp?.bmi || !mp?.gender || !mp?.goal || !mp?.activity_level)
+        (!mp?.height_cm ||
+          !mp?.weight_kg ||
+          !mp?.bmi ||
+          !mp?.gender ||
+          !mp?.goal ||
+          !mp?.activity_level)
       ) {
         setShowSetupModal(true);
       }
     } catch (err: any) {
-      console.error('Error loading member dashboard:', {
+      console.error("Error loading dashboard:", {
         message: err.message,
         stack: err.stack,
       });
@@ -558,27 +537,21 @@ useEffect(() => {
   };
 }, [memberId, router]);
 
+
 useEffect(() => {
   if (latestPlan && workoutHistory) {
-    console.log('Initializing currentWorkout:', {
-      latestPlanId: latestPlan.id,
-      plan: latestPlan.plan,
-      planType: typeof latestPlan.plan,
-      isArray: Array.isArray(latestPlan.plan),
-    });
-
     const today = new Date().toISOString().split('T')[0];
-    const todayHistory = workoutHistory.find(
-      (h: any) =>
-        new Date(h.recorded_at).toISOString().split('T')[0] === today &&
-        h.workout_plan_id === latestPlan.id
+    const latestPlanDate = new Date(latestPlan.created_at).toISOString().split('T')[0];
+
+    const todayHistory = workoutHistory.find((h: any) =>
+      new Date(h.recorded_at).toISOString().split('T')[0] === today &&
+      h.workout_plan_id === latestPlan.id
     );
 
     if (todayHistory && todayHistory.workout) {
-      console.log('Using existing workout history for today:', todayHistory.workout);
       setCurrentWorkout(todayHistory.workout);
-    } else {
-      // Handle cases where plan is not an array
+    } else if (latestPlanDate < today) {
+      // Auto-load same as latest if no new assignment today
       const planArray = Array.isArray(latestPlan.plan)
         ? latestPlan.plan
         : latestPlan.plan?.exercises
@@ -588,7 +561,19 @@ useEffect(() => {
         ...ex,
         sets: ex.sets ? ex.sets.map((set: any) => ({ ...set, completed: false })) : [],
       }));
-      console.log('Initialized currentWorkout:', initialized);
+      setCurrentWorkout(initialized);
+      
+    } else {
+      // Normal load
+      const planArray = Array.isArray(latestPlan.plan)
+        ? latestPlan.plan
+        : latestPlan.plan?.exercises
+        ? latestPlan.plan.exercises
+        : [];
+      const initialized = planArray.map((ex: any) => ({
+        ...ex,
+        sets: ex.sets ? ex.sets.map((set: any) => ({ ...set, completed: false })) : [],
+      }));
       setCurrentWorkout(initialized);
     }
   }
@@ -1337,7 +1322,22 @@ if (!response.ok) {
   }
 };
 
-  if (loading) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="animate-spin" size={48} /></div>;
+  if (loading) {
+  return (
+    <div className="space-y-6 p-6 min-h-screen bg-white dark:from-gray-900 dark:to-gray-800">
+      <Skeleton height={40} width="30%" /> {/* Header */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => <Skeleton key={i} height={120} />)} {/* Quick stats cards */}
+      </div>
+      <Skeleton height={200} /> {/* Assigned Trainer card */}
+      <Skeleton height={300} /> {/* Weight Tracking chart */}
+      <Skeleton height={400} /> {/* Meal Plan section */}
+      <Skeleton height={300} /> {/* Photo Gallery */}
+      <Skeleton height={400} /> {/* Workout Tracker */}
+      <Skeleton height={400} /> {/* Progress History */}
+    </div>
+  );
+}
 
   return (
     <motion.div
@@ -1606,12 +1606,16 @@ if (!response.ok) {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {showPlanSection && (
-          <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3 }}>
-            <Card className="shadow-lg rounded-xl overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-blue-200 to-blue-300">
-                <CardTitle className="flex items-center pt-1"><Target className="mr-2" /> Plan</CardTitle>
+          <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3 }} whileHover={{ scale: 1.02, y: -4 }} className=" cursor-pointer">
+            <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden
+                  bg-purple-50  
+                   transition-all duration-300
+                   border border-gray-100 
+                   hover:shadow-xl hover:scale-[1.005] hover:border-purple-300 dark:bg-[#0e182b] dark:border-none">
+              <CardHeader className="pb-0">
+                <CardTitle className="flex items-center text-xl font-medium text-purple-500"><Target className="mr-2" /> Plan</CardTitle>
               </CardHeader>
-              <CardContent className="pt-4">
+              <CardContent className="pt-2">
                 <div className="text-sm text-muted-foreground">Selected plan</div>
                 <PlanExpirationReminder plan={profile?.plan} planStart={profile?.plan_start} />
                 <div className="mt-2 font-semibold text-lg">{profile?.plan ?? "No plan assigned"}</div>
@@ -1627,10 +1631,14 @@ if (!response.ok) {
 
         {showWeightSection && (
           <>
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.1 }}>
-              <Card className="shadow-lg rounded-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-green-200 to-green-300">
-                  <CardTitle className="flex items-center pt-1"><Scale className="mr-2" /> Weight</CardTitle>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.1 }} whileHover={{ scale: 1.02, y: -4 }} className=" cursor-pointer">
+              <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden
+                  bg-indigo-50  
+                   transition-all duration-300
+                   border border-gray-100 
+                   hover:shadow-xl hover:scale-[1.005] hover:border-indigo-300 dark:bg-[#0e182b] dark:border-none">
+                <CardHeader className="pb-0">
+                  <CardTitle className="flex items-center text-xl font-medium text-indigo-500"><Scale className="mr-2" /> Weight</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="text-sm text-muted-foreground">Latest</div>
@@ -1649,10 +1657,14 @@ if (!response.ok) {
               </Card>
             </motion.div>
 
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }}>
-              <Card className="shadow-lg rounded-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-purple-200 to-purple-300">
-                  <CardTitle className="flex items-center"><Ruler className="mr-2" /> Height</CardTitle>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }} whileHover={{ scale: 1.02, y: -4 }} className=" cursor-pointer">
+              <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden
+                  bg-teal-50  
+                   transition-all duration-300
+                   border border-gray-100 
+                   hover:shadow-xl hover:scale-[1.005] hover:border-teal-300 dark:bg-[#0e182b] dark:border-none">
+                <CardHeader className="pb-0">
+                  <CardTitle className="flex items-center text-xl font-medium text-teal-500"><Ruler className="mr-2" /> Height</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="text-sm text-muted-foreground mt-1">Height</div>
@@ -1661,10 +1673,14 @@ if (!response.ok) {
               </Card>
             </motion.div>
 
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }}>
-              <Card className="shadow-lg rounded-xl overflow-hidden">
-                <CardHeader className="bg-gradient-to-r from-red-200 to-red-300">
-                  <CardTitle className="flex items-center"><Ruler className="mr-2" /> BMI</CardTitle>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }} whileHover={{ scale: 1.02, y: -4 }} className=" cursor-pointer">
+              <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden
+                  bg-red-50  
+                   transition-all duration-300
+                   border border-gray-100 
+                   hover:shadow-xl hover:scale-[1.005] hover:border-red-300 dark:bg-[#0e182b] dark:border-none">
+                <CardHeader className="pb-0">
+                  <CardTitle className="flex items-center text-xl font-medium text-red-400"><Ruler className="mr-2" /> BMI</CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="text-sm text-muted-foreground mt-1">BMI</div>
@@ -1714,27 +1730,19 @@ if (!response.ok) {
           </>
         )}
       </div>
-
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
-        <Card className="shadow-lg rounded-xl overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-yellow-100 to-yellow-200">
-            <CardTitle className="flex items-center pt-2"><User className="mr-2" /> Assigned Trainer</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-4 space-y-2">
-            <div className="flex items-center">
+      <div className="flex flex-col lg:flex-row gap-6">
+      {showWeightSection && userRole !== 'nutritionist' && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="w-full lg:w-1/2">
+          <Card className="shadow-lg rounded-xl overflow-hidden h-full">
+            <CardHeader >
+              <CardTitle className="flex items-center"><BarChart2 className="mr-2" /> Weight Tracking</CardTitle>
+              
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="flex items-center pb-4">
               <User className="mr-2 text-yellow-400" /> Trainer: {trainer?.full_name ?? "Not assigned"}
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {showWeightSection && userRole !== 'nutritionist' && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
-          <Card className="shadow-lg rounded-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-orange-200 to-orange-300">
-              <CardTitle className="flex items-center"><BarChart2 className="mr-2" /> Weight Tracking</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
+              <Suspense fallback={<Skeleton height={300} />}>
               {weightHistory.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
                   <LineChart data={weightHistory.map((d) => ({ 
@@ -1782,21 +1790,23 @@ if (!response.ok) {
                   </p>
                 </div>
               )}
+              </Suspense>
             </CardContent>
           </Card>
         </motion.div>
       )}
 
       {showDietSection && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="w-full lg:w-1/2">
           <Card className="shadow-lg rounded-xl overflow-hidden">
-            <CardHeader className="bg-teal-100">
+            <CardHeader >
               <CardTitle className="flex items-center pt-2"><Apple className="mr-2" /> Meal Plan</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
               <div className="flex items-center justify-end mb-4 text-sm text-gray-600">
                 Assigned Nutritionist: <span className="font-medium ml-1">{nutritionist?.full_name ?? "Not assigned"}</span>
               </div>
+              <Suspense fallback={<Skeleton count={4} height={200} />}>
               {dietPlan && dietPlan.diet_plan && Object.keys(dietPlan.diet_plan).length > 0 ? (
                 <motion.div className={cn(
                   "grid gap-4",
@@ -1961,10 +1971,12 @@ if (!response.ok) {
                   </Accordion>
                 )}
               </div>
+              </Suspense>
             </CardContent>
           </Card>
         </motion.div>
       )}
+      </div>
 
       {showPhotoGallery && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
@@ -1973,6 +1985,7 @@ if (!response.ok) {
               <CardTitle className="flex items-center"><ImageIcon className="mr-2" /> Photo Gallery</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
+              <Suspense fallback={<Skeleton count={3} height={200} />}>
               {galleryPhotos.length === 0 ? (
                 <p className="text-muted-foreground">No photos uploaded yet.</p>
               ) : (
@@ -2011,6 +2024,7 @@ if (!response.ok) {
                   Next upload available {formatDistanceToNowStrict(addDays(new Date(galleryPhotos[0].date), 7), { addSuffix: true })}.
                 </p>
               )}
+              </Suspense>
             </CardContent>
           </Card>
         </motion.div>
@@ -2025,7 +2039,9 @@ if (!response.ok) {
           <p className="text-muted-foreground">Track your workout progress and history</p>
         </CardHeader>
         <CardContent>
+          <Suspense fallback={<Skeleton height={300} />}>
           <WorkoutTracker latestPlan={latestPlan} memberId={memberId || ''} />
+          </Suspense>
         </CardContent>
       </Card>
       <Card className="shadow-lg">
@@ -2066,49 +2082,54 @@ if (!response.ok) {
               </div>
             )}
           </div>
-          {loading ? (
-            <p className="text-center text-gray-500">Loading...</p>
-          ) : workoutHistory.length === 0 ? (
-            <p className="text-center text-gray-500">No workout history available for the selected range.</p>
-          ) : (
-            <div className="flex gap-6">
-              {/* Left Half: Workout History Table */}
-              <div className="w-1/2">
-                <ScrollArea className="h-[300px] w-full rounded-md border border-gray-200">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-white shadow-sm">
-                      <TableRow>
-                        <TableHead className="w-[60px]">#</TableHead>
-                        <TableHead>Workout</TableHead>
-                        <TableHead>Progress</TableHead>
-                        <TableHead>Date</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {workoutHistory.map((item: any, index: number) => (
-                        <TableRow key={item.id} className="hover:bg-gray-50">
-                          <TableCell>{index + 1}</TableCell>
-                          <TableCell className="max-w-[150px] truncate">{getExerciseNames(item.workout)}</TableCell>
-                          <TableCell>
-                            <DonutChart percentage={item.completion_percentage} />
-                          </TableCell>
-                          <TableCell>{new Date(item.recorded_at).toLocaleDateString()}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
-              </div>
-              {/* Right Half: Overall Progress Donut Chart */}
-              <div className="w-1/2 flex flex-col items-center justify-center">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Overall Progress</h3>
-                <AnimatedDonutChart percentage={overallProgress} />
-                <p className="mt-4 text-sm text-gray-500">
-                  Average completion: {overallProgress}%
-                </p>
-              </div>
-            </div>
-          )}
+          
+          <Suspense fallback={<Skeleton height={400} />}>
+              {workoutHistory.length === 0 ? (
+                <p className="text-center text-gray-500">No workout history available for the selected range.</p>
+              ) : (
+                <div className="flex gap-6">
+                  {/* Table */}
+                  <div className="w-1/2">
+                    <ScrollArea className="h-[300px] w-full rounded-md border border-gray-200">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-white shadow-sm">
+                          <TableRow>
+                            <TableHead className="w-[60px]">#</TableHead>
+                            <TableHead>Workout</TableHead>
+                            <TableHead>Progress</TableHead>
+                            <TableHead>Date</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {workoutHistory.map((item: any, index: number) => (
+                            <TableRow key={item.id} className="hover:bg-gray-50">
+                              <TableCell>{index + 1}</TableCell>
+                              <TableCell className="max-w-[150px] truncate">{getExerciseNames(item.workout)}</TableCell>
+                              <TableCell>
+                                <Suspense fallback={<Skeleton circle width={40} height={40} />}>
+                                  <DonutChart percentage={item.completion_percentage} />
+                                </Suspense>
+                              </TableCell>
+                              <TableCell>{new Date(item.recorded_at).toLocaleDateString()}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
+                  </div>
+                  {/* Overall Progress */}
+                  <div className="w-1/2 flex flex-col items-center justify-center">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Overall Progress</h3>
+                    <Suspense fallback={<Skeleton circle width={150} height={150} />}>
+                      <AnimatedDonutChart percentage={overallProgress} />
+                    </Suspense>
+                    <p className="mt-4 text-sm text-gray-500">
+                      Average completion: {overallProgress}%
+                    </p>
+                  </div>
+                </div>
+              )}
+            </Suspense>
         </CardContent>
       </Card>
     </div>
