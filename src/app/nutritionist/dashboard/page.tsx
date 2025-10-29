@@ -1,6 +1,4 @@
-
 "use client";
-
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -19,9 +17,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import FoodItemInput from "@/components/FoodItemInput";   // <-- ADD THIS
 import { Loader2, User, Apple, AlertCircle, BarChart2, Eye } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
@@ -93,9 +90,9 @@ export default function NutritionistDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [dietHistory, setDietHistory] = useState<DietHistory[]>([]);
   const [chartData, setChartData] = useState<DietChartData[]>([]);
-  const memoizedMembers = useMemo(() => members, [members]);
+  const [currentMealIndex, setCurrentMealIndex] = useState<number>(0);
   const router = useRouter();
-
+  const [isUpdateToday, setIsUpdateToday] = useState(false);
   useEffect(() => {
     loadMembers();
   }, []);
@@ -260,43 +257,6 @@ export default function NutritionistDashboardPage() {
       ...prev,
       { name: `Meal ${prev.length + 1}`, items: [{ name: "", quantity: "" }] },
     ]);
-  };
-
-  const removeMeal = (index: number) => {
-    if (newDietPlan.length > 1) {
-      setNewDietPlan(prev => prev.filter((_, i) => i !== index));
-    }
-  };
-
-  const updateMealName = (index: number, name: string) => {
-    setNewDietPlan(prev =>
-      prev.map((meal, i) => (i === index ? { ...meal, name } : meal))
-    );
-  };
-
-  const addMealItem = (mealIndex: number) => {
-    setNewDietPlan(prev =>
-      prev.map((meal, i) =>
-        i === mealIndex
-          ? { ...meal, items: [...meal.items, { name: "", quantity: "" }] }
-          : meal
-      )
-    );
-  };
-
-  const updateMealItem = (mealIndex: number, itemIndex: number, field: "name" | "quantity", value: string) => {
-    setNewDietPlan(prev =>
-      prev.map((meal, i) =>
-        i === mealIndex
-          ? {
-              ...meal,
-              items: meal.items.map((item, j) =>
-                j === itemIndex ? { ...item, [field]: value } : item
-              ),
-            }
-          : meal
-      )
-    );
   };
 
   const removeMealItem = (mealIndex: number, itemIndex: number) => {
@@ -525,6 +485,9 @@ export default function NutritionistDashboardPage() {
                           size="sm"
                           onClick={() => {
                             setSelectedMember(member);
+                            const today = new Date().toISOString().split('T')[0];
+                            const todayPlan = member.latest_diet_plan?.created_at === today;
+                            setIsUpdateToday(!!todayPlan);
                             setNewDietPlan(
                               member.latest_diet_plan
                                 ? Object.entries(member.latest_diet_plan.diet_plan).map(([meal, items]) => ({
@@ -563,117 +526,160 @@ export default function NutritionistDashboardPage() {
       </AnimatePresence>
 
       <Dialog open={showDietModal} onOpenChange={(open) => {
-        setShowDietModal(open);
-        if (!open) {
-          setNewDietPlan([{ name: "Meal 1", items: [{ name: "", quantity: "" }] }]);
-          setSelectedMember(null);
-          setError(null);
-        }
-      }}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {selectedMember?.latest_diet_plan ? `Update Diet Plan for ${selectedMember.name}` : `Assign Diet Plan for ${selectedMember?.name}`}
-            </DialogTitle>
-            <DialogDescription>
-              Enter meal names and items with quantities (e.g., Oats, 50g).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-6">
-            {newDietPlan.map((meal, mealIndex) => (
-              <div key={mealIndex}>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    placeholder="Meal Name (e.g., Breakfast)"
-                    value={meal.name}
-                    onChange={(e) => updateMealName(mealIndex, e.target.value)}
-                    className="flex-1"
-                  />
-                  {newDietPlan.length > 1 && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => removeMeal(mealIndex)}
-                    >
-                      Remove Meal
-                    </Button>
-                  )}
-                </div>
-                {meal.items.map((item, itemIndex) => (
-                  <div key={itemIndex} className="flex items-center space-x-2 mt-2">
-                    <Input
-                      placeholder="Item (e.g., Oats)"
-                      value={item.name}
-                      onChange={(e) => updateMealItem(mealIndex, itemIndex, "name", e.target.value)}
-                      className="flex-1"
-                    />
-                    <Input
-                      placeholder="Quantity (e.g., 50g)"
-                      value={item.quantity}
-                      onChange={(e) => updateMealItem(mealIndex, itemIndex, "quantity", e.target.value)}
-                      className="flex-1"
-                    />
-                    {meal.items.length > 1 && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => removeMealItem(mealIndex, itemIndex)}
-                      >
-                        Remove
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => addMealItem(mealIndex)}
-                  className="mt-2"
-                >
-                  Add Item
-                </Button>
-              </div>
-            ))}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addMeal}
-              className="mt-4"
-            >
-              Add Meal
-            </Button>
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md flex items-center text-red-700 text-sm">
-                <AlertCircle className="h-4 w-4 mr-2" />
-                {error}
-              </div>
+  setShowDietModal(open);
+  if (!open) {
+    setNewDietPlan([{ name: "Meal 1", items: [] }]);
+    setSelectedMember(null);
+    setError(null);
+    setCurrentMealIndex(0);
+  }
+}}>
+  <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>
+        {isUpdateToday ? `Update Today's Diet Plan` : `Assign Diet Plan for Today`}
+      </DialogTitle>
+      <DialogDescription>
+        Select a meal, add foods, and see live macros.
+      </DialogDescription>
+    </DialogHeader>
+
+    {/* MEAL TABS */}
+    <div className="flex gap-2 flex-wrap mb-4">
+      {newDietPlan.map((meal, i) => (
+        <Button
+          key={i}
+          size="sm"
+          variant={i === currentMealIndex ? "default" : "outline"}
+          onClick={() => setCurrentMealIndex(i)}
+        >
+          {meal.name}
+        </Button>
+      ))}
+      <Button size="sm" variant="outline" onClick={addMeal}>
+        + Add Meal
+      </Button>
+    </div>
+
+    {/* SINGLE FOOD INPUT */}
+    <div className="p-4 border rounded-lg bg-gray-50">
+      <div className="mb-2 text-sm font-medium text-teal-600">
+        Adding to: <span className="font-bold">{newDietPlan[currentMealIndex].name}</span>
+      </div>
+      <FoodItemInput
+        onAdd={({ name, quantity }) => {
+          setNewDietPlan(prev =>
+            prev.map((m, i) =>
+              i === currentMealIndex
+                ? { ...m, items: [...m.items, { name, quantity }] }
+                : m
+            )
+          );
+        }}
+      />
+    </div>
+
+    {/* LIVE MACRO LIST */}
+    <div className="mt-6 space-y-3">
+      {newDietPlan.map((meal, i) => {
+        const total = meal.items.reduce((sum, item) => {
+          const qty = parseFloat(item.quantity) || 0;
+          const food = item.name;
+          return sum;
+        }, { calories: 0, protein: 0, carbs: 0, fats: 0 });
+        
+const MealMacroSummary = ({ meal }: { meal: Meal }) => {
+  const [macros, setMacros] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 });
+
+  useEffect(() => {
+    const calc = async () => {
+      const total = { calories: 0, protein: 0, carbs: 0, fats: 0 };
+      for (const item of meal.items) {
+        const qty = parseFloat(item.quantity) || 0;
+        if (!item.name || qty <= 0) continue;
+        const res = await fetch(`/api/food/macros?name=${encodeURIComponent(item.name)}&qty=${qty}`);
+        const data = await res.json();
+        total.calories += data.calories || 0;
+        total.protein += data.protein || 0;
+        total.carbs += data.carbs || 0;
+        total.fats += data.fats || 0;
+      }
+      setMacros(total);
+    };
+    calc();
+  }, [meal.items]);
+
+  if (meal.items.length === 0) return null;
+
+  return (
+    <div className="mt-2 grid grid-cols-4 gap-2 text-xs">
+      <div className="text-teal-600 font-medium">{macros.calories.toFixed(0)} kcal</div>
+      <div className="text-blue-600">P: {macros.protein.toFixed(1)}g</div>
+      <div className="text-amber-600">C: {macros.carbs.toFixed(1)}g</div>
+      <div className="text-red-600">F: {macros.fats.toFixed(1)}g</div>
+    </div>
+  );
+};
+
+        return (
+          <div
+            key={i}
+            className={cn(
+              "p-3 rounded-lg border",
+              i === currentMealIndex ? "bg-teal-50 border-teal-300" : "bg-white"
             )}
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowDietModal(false);
-                  setNewDietPlan([{ name: "Meal 1", items: [{ name: "", quantity: "" }] }]);
-                  setSelectedMember(null);
-                  setError(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleUpdateDietPlan} disabled={updating === selectedMember?.user_id}>
-                {updating === selectedMember?.user_id ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  "Submit Diet Plan"
-                )}
-              </Button>
+          >
+            <div className="flex justify-between items-center">
+              <div className="font-medium">{meal.name}</div>
+              <div className="text-sm text-gray-600">
+                {meal.items.length} item{meal.items.length !== 1 ? 's' : ''}
+              </div>
             </div>
+            <div className="mt-2 space-y-1">
+              {meal.items.map((item, j) => (
+                <div key={j} className="flex justify-between text-sm">
+                  <span>{item.name}: {item.quantity}</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-red-600 h-6"
+                    onClick={() => removeMealItem(i, j)}
+                  >
+                    ×
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <MealMacroSummary meal={meal} />
           </div>
-        </DialogContent>
-      </Dialog>
+        );
+      })}
+    </div>
+
+    {error && (
+      <div className="p-3 bg-red-50 border border-red-200 rounded-md flex items-center text-red-700 text-sm">
+        <AlertCircle className="h-4 w-4 mr-2" />
+        {error}
+      </div>
+    )}
+
+    <div className="flex justify-end space-x-2 pt-4">
+      <Button variant="outline" onClick={() => setShowDietModal(false)}>
+        Cancel
+      </Button>
+      <Button onClick={handleUpdateDietPlan} disabled={!!updating}>
+        {updating ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Saving...
+          </>
+        ) : (
+          isUpdateToday ? "Update Plan" : "Assign Plan"
+        )}
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
 
       <Dialog open={showChartModal} onOpenChange={(open) => {
         setShowChartModal(open);

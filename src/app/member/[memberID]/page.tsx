@@ -1,7 +1,7 @@
 "use client";
 import Image from 'next/image';
 import { cn } from "@/lib/utils";
-import React, { useEffect, useMemo, useState, Suspense, lazy } from "react";
+import React, { useEffect, useMemo, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -97,8 +97,6 @@ interface WorkoutPlan {
   created_by: string;
   plan: string;
 }
-
-
 export default function MemberDashboardPage() {
   const router = useRouter();
   const params = useParams();
@@ -170,6 +168,9 @@ const handleRangeChange = (value: string) => {
     return Math.round(totalPercentage / workoutHistory.length);
   };
   const overallProgress = calculateOverallProgress();
+  const [nutritionData, setNutritionData] = useState<any[]>([]);
+  const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 });
+  const [fetchError, setFetchError] = useState(null);
 
   const goalOptions = [
     "Lose Weight",
@@ -217,6 +218,10 @@ const mealImageMap: { [key: string]: string } = {
     const name = getMealName(mealKey).toLowerCase();
     return mealImageMap[name] || mealImageMap['meal 1'] || 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75';
   };
+const parseQuantity = (qtyStr: string): number => {
+  const match = qtyStr.match(/(\d+\.?\d*)/); // Extract number (e.g., "100" from "100gm")
+  return match ? parseFloat(match[0]) : 1; // Default to 1 if invalid
+};
 
   // Define steps dynamically based on missing profile fields
   const getDynamicSteps = (profile: MemberProfile | null) => {
@@ -493,11 +498,9 @@ useEffect(() => {
 
       // ✅ Upload Eligibility
       if (loggedInUserId === memberId) {
-        const latestPhoto = galleryRes.data?.[0];
-        const canUpload =
-          !latestPhoto || isAfter(new Date(), addDays(new Date(latestPhoto.date), 7));
-        setCanUploadPhoto(canUpload);
+        setCanUploadPhoto(true);
       }
+
 
       // ✅ Trainer & Nutritionist
       if (trainerRes?.trainer_name) {
@@ -605,6 +608,54 @@ useEffect(() => {
     checkIfAssignedTrainer();
   }
 }, [memberId, isOwnProfile]);
+
+useEffect(() => {
+  if (!dietPlan?.diet_plan) return;
+
+  const fetchNutrition = async () => {
+    try {
+      const allItems = Object.values(dietPlan.diet_plan).flatMap(items =>
+        items.map(item => ({
+          foodName: Object.keys(item)[0].trim(),
+          quantity: parseQuantity(Object.values(item)[0]),
+        }))
+      );
+      console.log('Fetching nutrition for:', allItems); // Debug input
+
+      const results = await Promise.all(
+        allItems.map(async item => {
+          try {
+            const res = await fetch(`/api/nutrition/${encodeURIComponent(item.foodName)}?quantity=${item.quantity}`);
+            const data = res.ok ? await res.json() : { food_name: item.foodName, calories: 0, protein: 0, carbs: 0, fats: 0 };
+            console.log(`Response for ${item.foodName}:`, data); // Debug API response
+            return data;
+          } catch (error) {
+            console.warn(`Error fetching ${item.foodName}:`, error);
+            return { food_name: item.foodName, calories: 0, protein: 0, carbs: 0, fats: 0 };
+          }
+        })
+      );
+      setNutritionData(results);
+
+      const totalsRes = await fetch('/api/nutrition/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: allItems }),
+      });
+      const totals = totalsRes.ok ? await totalsRes.json() : { calories: 0, protein: 0, carbs: 0, fats: 0 };
+      console.log('Daily totals:', totals); // Debug totals
+      setDailyTotals(totals);
+      setFetchError(null);
+    } catch (error:any) {
+      console.warn('Nutrition fetch error:', error);
+      setFetchError(error.message);
+      setNutritionData([]);
+      setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0 });
+    }
+  };
+
+  fetchNutrition();
+}, [dietPlan]);
 
 
   // Modified weight extraction to use member_profiles when weight_history is empty
@@ -886,96 +937,84 @@ useEffect(() => {
   }
 
   async function handlePhotoUpload(file: File) {
-    if (!file || !isOwnProfile) {
-      setError("Invalid file or unauthorized action");
-      toast.error("Invalid file or unauthorized action");
-      return;
-    }
-
-    const validTypes = ["image/jpeg", "image/png"];
-    if (!validTypes.includes(file.type)) {
-      setError("Only JPEG or PNG files are allowed");
-      toast.error("Only JPEG or PNG files are allowed");
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setError("File size must be less than 5MB");
-      toast.error("File size must be less than 5MB");
-      return;
-    }
-
-    setUploading(true);
-    setError(null);
-
-    try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        setError("Authentication failed. Please log in again.");
-        toast.error("Authentication failed. Please log in again.");
-        router.push("/login");
-        return;
-      }
-      if (memberId !== session.user.id) {
-        throw new Error("Unauthorized: memberId does not match authenticated user");
-      }
-
-      const { count, error: countError } = await supabase
-        .from("gallery")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", session.user.id)
-        .gt("date", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
-
-      if (countError) {
-        setError(`Upload check failed: ${countError.message}`);
-        toast.error(`Upload check failed: ${countError.message}`);
-        return;
-      }
-      if (count && count > 0) {
-        setError("You can only upload one photo every 7 days.");
-        toast.error("You can only upload one photo every 7 days.");
-        return;
-      }
-
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `gallery/${session.user.id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("gallery")
-        .upload(filePath, file, {
-          contentType: file.type,
-        });
-
-      if (uploadError) {
-        console.error("Storage upload error details:", uploadError);
-        throw new Error(`Storage upload failed: ${uploadError.message}`);
-      }
-
-      const { data: { publicUrl } } = supabase.storage.from("gallery").getPublicUrl(filePath);
-
-      if (!publicUrl) throw new Error("Failed to get public URL for uploaded file");
-
-      const { error: insertError } = await supabase
-        .from("gallery")
-        .insert({
-          photo: publicUrl,
-          user_email: session.user.email,
-          user_id: session.user.id,
-        });
-
-      if (insertError) throw new Error(`Database insert failed: ${insertError.message}`);
-
-      await refreshData();
-      setCanUploadPhoto(false);
-      toast.success("Photo uploaded successfully!");
-    } catch (error: any) {
-      console.error("Photo upload error:", error.message);
-      setError(`Failed to upload photo: ${error.message}`);
-      toast.error(`Failed to upload photo: ${error.message}`);
-    } finally {
-      setUploading(false);
-    }
+  if (!file || !isOwnProfile) {
+    setError("Invalid file or unauthorized action");
+    toast.error("Invalid file or unauthorized action");
+    return;
   }
+
+  const validTypes = ["image/jpeg", "image/png"];
+  if (!validTypes.includes(file.type)) {
+    setError("Only JPEG or PNG files are allowed");
+    toast.error("Only JPEG or PNG files are allowed");
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    setError("File size must be less than 5MB");
+    toast.error("File size must be less than 5MB");
+    return;
+  }
+
+  setUploading(true);
+  setError(null);
+
+  try {
+    // ✅ Check authentication
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      setError("Authentication failed. Please log in again.");
+      toast.error("Authentication failed. Please log in again.");
+      router.push("/login");
+      return;
+    }
+
+    if (memberId !== session.user.id) {
+      throw new Error("Unauthorized: memberId does not match authenticated user");
+    }
+
+    // 🚫 Removed the 7-day restriction check completely
+
+    // ✅ Upload file to Supabase Storage
+    const fileExt = file.name.split(".").pop();
+    const fileName = `${Date.now()}.${fileExt}`;
+    const filePath = `gallery/${session.user.id}/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("gallery")
+      .upload(filePath, file, { contentType: file.type });
+
+    if (uploadError) {
+      console.error("Storage upload error details:", uploadError);
+      throw new Error(`Storage upload failed: ${uploadError.message}`);
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from("gallery").getPublicUrl(filePath);
+
+    if (!publicUrl) throw new Error("Failed to get public URL for uploaded file");
+
+    // ✅ Insert uploaded photo record into DB
+    const { error: insertError } = await supabase
+      .from("gallery")
+      .insert({
+        photo: publicUrl,
+        user_email: session.user.email,
+        user_id: session.user.id,
+      });
+
+    if (insertError) throw new Error(`Database insert failed: ${insertError.message}`);
+
+    await refreshData();
+    toast.success("Photo uploaded successfully!");
+  } catch (error: any) {
+    console.error("Photo upload error:", error.message);
+    setError(`Failed to upload photo: ${error.message}`);
+    toast.error(`Failed to upload photo: ${error.message}`);
+  } finally {
+    setUploading(false);
+  }
+}
+
 
   async function handleMealIntake(meal: string, taken: boolean) {
     if (!dietPlan || !isOwnProfile) {
@@ -1797,254 +1836,240 @@ if (!response.ok) {
       )}
 
       {showDietSection && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="w-full lg:w-1/2">
-          <Card className="shadow-lg rounded-xl overflow-hidden">
-            <CardHeader >
-              <CardTitle className="flex items-center pt-2"><Apple className="mr-2" /> Meal Plan</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="flex items-center justify-end mb-4 text-sm text-gray-600">
-                Assigned Nutritionist: <span className="font-medium ml-1">{nutritionist?.full_name ?? "Not assigned"}</span>
-              </div>
-              <Suspense fallback={<Skeleton count={4} height={200} />}>
-              {dietPlan && dietPlan.diet_plan && Object.keys(dietPlan.diet_plan).length > 0 ? (
-                <motion.div className={cn(
-                  "grid gap-4",
-                  Object.keys(dietPlan.diet_plan).length === 1 ? "grid-cols-1" :
-                  Object.keys(dietPlan.diet_plan).length === 2 ? "grid-cols-1 sm:grid-cols-2" :
-                  Object.keys(dietPlan.diet_plan).length === 3 ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3" :
-                  "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
-                )}>
-                  {Object.entries(dietPlan.diet_plan)
-                    .filter(([meal]) => todayMealStatus[meal] === undefined)
-                    .map(([meal, items], index) => (
-                      <motion.div
-                        key={meal}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: index * 0.1 }}
-                        className="rounded-xl overflow-hidden shadow-md bg-white flex flex-col"
-                      >
-                        <div className="relative w-full h-45">
-                          <Image
-                            src={getMealImage(meal)}
-                            alt={`${getMealName(meal)} image`}
-                            fill
-                            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                            className="object-cover"
-                            priority={index < 4}
-                          />
+  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="w-full lg:w-1/2">
+    <Card className="shadow-lg rounded-xl overflow-hidden">
+      <CardHeader>
+        <CardTitle className="flex items-center pt-2"><Apple className="mr-2" /> Meal Plan</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <div className="flex items-center justify-end mb-4 text-sm text-gray-600">
+          Assigned Nutritionist: <span className="font-medium ml-1">{nutritionist?.full_name ?? "Not assigned"}</span>
+        </div>
+        <Suspense fallback={<Skeleton count={4} height={200} />}>
+          {dietPlan && dietPlan.diet_plan && Object.keys(dietPlan.diet_plan).length > 0 ? (
+            <div className={cn(
+              "grid gap-4",
+              Object.keys(dietPlan.diet_plan).length === 1 ? "grid-cols-1" :
+              Object.keys(dietPlan.diet_plan).length === 2 ? "grid-cols-1 sm:grid-cols-2" :
+              Object.keys(dietPlan.diet_plan).length === 3 ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3" :
+              "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+            )}>
+              {Object.entries(dietPlan.diet_plan)
+                .filter(([meal]) => todayMealStatus[meal] === undefined)
+                .map(([meal, items], index) => {
+                  const mealCalories = items.reduce((sum, item) => {
+                    const foodName = Object.keys(item)[0];
+                    const nutrition = nutritionData.find(n => n.food_name.toLowerCase() === foodName.toLowerCase());
+                    return sum + (nutrition?.calories || 0);
+                  }, 0);
+                  return (
+                    <motion.div
+                      key={meal}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.1 }}
+                      className="rounded-xl overflow-hidden shadow-md bg-white flex flex-col"
+                    >
+                      <div className="relative w-full h-45">
+                        <Image
+                          src={getMealImage(meal)}
+                          alt={`${getMealName(meal)} image`}
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                          className="object-cover"
+                          priority={index < 4}
+                        />
+                        <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-xs">
+                          {mealCalories.toFixed(0)} kcal
                         </div>
-                        <div className="p-4 flex-1">
-                          <div className="text-xs bg-teal-50 px-2 py-1 rounded-md mb-2 inline-block">
-                            {getMealName(meal)}
-                          </div>
-                          <div className="text-sm text-gray-700">
-                            {Array.isArray(items) && items.length > 0
-                              ? items.map(item => {
-                                  const key = Object.keys(item)[0];
-                                  const value = Object.values(item)[0];
-                                  return key && value ? `${key}: ${value}` : 'Unknown Item';
-                                }).join(", ")
-                              : 'No items specified'}
-                          </div>
-                          {isOwnProfile && (
-                            <div className="mt-4 flex justify-end space-x-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMealIntake(meal, true)}
-                                disabled={updatingMeal === meal}
-                                className="text-green-600 hover:bg-green-50"
-                              >
-                                {updatingMeal === meal ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <CheckCircle className="h-4 w-4" />
-                                )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMealIntake(meal, false)}
-                                disabled={updatingMeal === meal}
-                                className="text-red-600 hover:bg-red-50"
-                              >
-                                {updatingMeal === meal ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <XCircle className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </div>
-                          )}
+                      </div>
+                      <div className="p-4 flex-1">
+                        <div className="text-xs bg-teal-50 px-2 py-1 rounded-md mb-2 inline-block">
+                          {getMealName(meal)}
                         </div>
-                      </motion.div>
-                    ))}
-                </motion.div>
+                        <div className="text-sm text-gray-700">
+                          {Array.isArray(items) && items.length > 0
+                            ? items.map(item => {
+                                const foodName = Object.keys(item)[0];
+                                const value = Object.values(item)[0];
+                                const nutrition = nutritionData.find(n => n.food_name.toLowerCase() === foodName.toLowerCase());
+                                return (
+                                  <div key={foodName} className="mb-2">
+                                    {foodName && value ? `${foodName}: ${value}` : 'Unknown Item'}
+                                    {nutrition ? (
+                                      <div className="text-xs text-gray-600">
+                                        {nutrition.calories.toFixed(0)} kcal | P:{nutrition.protein?.toFixed(1)}g C:{nutrition.carbs?.toFixed(1)}g F:{nutrition.fats?.toFixed(1)}g
+                                      </div>
+                                    ) : (
+                                      <AlertCircle className="h-3 w-3 inline ml-1 text-yellow-500"  />
+                                    )}
+                                  </div>
+                                );
+                              })
+                            : 'No items specified'}
+                        </div>
+                        {isOwnProfile && (
+                          <div className="mt-4 flex justify-end space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleMealIntake(meal, true)}
+                              disabled={updatingMeal === meal}
+                              className="text-green-600 hover:bg-green-50"
+                            >
+                              {updatingMeal === meal ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleMealIntake(meal, false)}
+                              disabled={updatingMeal === meal}
+                              className="text-red-600 hover:bg-red-50"
+                            >
+                              {updatingMeal === meal ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <XCircle className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground italic text-center py-8">
+              No diet plan assigned yet
+              {userRole === 'nutritionist' && (
+                <Button
+                  variant="default"
+                  onClick={() => setShowDietUpdateModal(true)}
+                  className="ml-4"
+                >
+                  Assign Diet Plan
+                </Button>
+              )}
+            </div>
+          )}
+          {dietPlan && dietPlan.diet_plan && Object.keys(dietPlan.diet_plan).length > 0 && (
+            <>
+              {userRole === 'nutritionist' && (
+                <Button
+                  variant="default"
+                  onClick={() => {
+                    setNewDietPlan(
+                      Object.entries(dietPlan.diet_plan).map(([meal, items]) => ({
+                        name: meal,
+                        items: items.map(item => ({
+                          name: Object.keys(item)[0],
+                          quantity: Object.values(item)[0],
+                        })),
+                      }))
+                    );
+                    setShowDietUpdateModal(true);
+                  }}
+                  className="mt-4"
+                >
+                  Update Diet Plan
+                </Button>
+              )}
+              {Object.keys(todayMealStatus).length === Object.keys(dietPlan.diet_plan).length ? (
+                <p className="text-muted-foreground text-center mt-4">All meals for today have been marked.</p>
               ) : (
-                <div className="text-sm text-muted-foreground italic text-center py-8">
-                  No diet plan assigned yet
-                  {userRole === 'nutritionist' && (
-                    <Button
-                      variant="default"
-                      onClick={() => setShowDietUpdateModal(true)}
-                      className="ml-4"
-                    >
-                      Assign Diet Plan
-                    </Button>
-                  )}
+                <div className="text-xs text-gray-500 mt-4 text-right">
+                  Updated {formatDistanceToNowStrict(new Date(dietPlan.updated_at))} ago
                 </div>
               )}
-              {dietPlan && dietPlan.diet_plan && Object.keys(dietPlan.diet_plan).length > 0 && (
-                <>
-                  {userRole === 'nutritionist' && (
-                    <Button
-                      variant="default"
-                      onClick={() => {
-                        setNewDietPlan(
-                          Object.entries(dietPlan.diet_plan).map(([meal, items]) => ({
-                            name: meal,
-                            items: items.map(item => ({
-                              name: Object.keys(item)[0],
-                              quantity: Object.values(item)[0],
-                            })),
-                          }))
-                        );
-                        setShowDietUpdateModal(true);
-                      }}
-                      className="mt-4"
-                    >
-                      Update Diet Plan
-                    </Button>
-                  )}
-                  {Object.keys(todayMealStatus).length === Object.keys(dietPlan.diet_plan).length ? (
-                    <p className="text-muted-foreground text-center mt-4">All meals for today have been marked.</p>
-                  ) : (
-                    <div className="text-xs text-gray-500 mt-4 text-right">
-                      Updated {formatDistanceToNowStrict(new Date(dietPlan.updated_at))} ago
-                    </div>
-                  )}
-                </>
-              )}
-              <div className="mt-8">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-gray-800 flex items-center">
-                    <BarChart2 className="mr-2 h-5 w-5 text-teal-600" /> Track your diet
-                  </h2>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowMissedDietModal(true)}
-                  >
-                    View Missed Meals
-                  </Button>
-                </div>
-                {dietHistory.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-4">No diet history available.</p>
-                ) : (
-                  <Accordion type="single" collapsible className="w-full mt-4">
-                    {dietHistory.map(history => (
-                      <AccordionItem key={history.id} value={history.id}>
-                        <AccordionTrigger className="text-sm font-semibold">
-                          {new Date(history.date).toLocaleDateString()}
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          <div className="space-y-2 text-sm text-gray-600">
-                            {Object.entries(history.intake).map(([meal, taken]) => (
-                              <div key={meal} className="flex items-center">
-                                <span className="font-medium">{getMealName(meal)}:</span>
-                                <span className="ml-2 flex items-center">
-                                  {taken ? <CheckCircle className="h-4 w-4 text-green-500 mr-1" /> : <XCircle className="h-4 w-4 text-red-500 mr-1" />}
-                                  {dietPlan?.diet_plan[meal]?.map(item => {
-                                    const key = Object.keys(item)[0];
-                                    const value = Object.values(item)[0];
-                                    return key && value ? `${key}: ${value}` : 'Unknown Item';
-                                  }).join(", ") || 'No items'}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                )}
+            </>
+          )}
+          <div className="mt-8">
+            <h2 className="text-lg font-bold text-gray-800 flex items-center mb-4">
+              <BarChart2 className="mr-2 h-5 w-5 text-teal-600" /> Daily Nutrition Totals
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div>
+                <div className="text-2xl font-bold text-teal-600">{dailyTotals.calories.toFixed(0)}</div>
+                <div className="text-xs text-gray-600">Calories</div>
               </div>
-              </Suspense>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{dailyTotals.protein.toFixed(1)}</div>
+                <div className="text-xs text-gray-600">Protein (g)</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-amber-600">{dailyTotals.carbs.toFixed(1)}</div>
+                <div className="text-xs text-gray-600">Carbs (g)</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-red-600">{dailyTotals.fats.toFixed(1)}</div>
+                <div className="text-xs text-gray-600">Fats (g)</div>
+              </div>
+            </div>
+          </div>
+          <div className="mt-8">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-800 flex items-center">
+                <BarChart2 className="mr-2 h-5 w-5 text-teal-600" /> Track your diet
+              </h2>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowMissedDietModal(true)}
+              >
+                View Missed Meals
+              </Button>
+            </div>
+            {dietHistory.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">No diet history available.</p>
+            ) : (
+              <Accordion type="single" collapsible className="w-full mt-4">
+                {dietHistory.map(history => (
+                  <AccordionItem key={history.id} value={history.id}>
+                    <AccordionTrigger className="text-sm font-semibold">
+                      {new Date(history.date).toLocaleDateString()}
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-2 text-sm text-gray-600">
+                        {Object.entries(history.intake).map(([meal, taken]) => (
+                          <div key={meal} className="flex items-center">
+                            <span className="font-medium">{getMealName(meal)}:</span>
+                            <span className="ml-2 flex items-center">
+                              {taken ? <CheckCircle className="h-4 w-4 text-green-500 mr-1" /> : <XCircle className="h-4 w-4 text-red-500 mr-1" />}
+                              {dietPlan?.diet_plan[meal]?.map(item => {
+                                const key = Object.keys(item)[0];
+                                const value = Object.values(item)[0];
+                                return key && value ? `${key}: ${value}` : 'Unknown Item';
+                              }).join(", ") || 'No items'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
+          </div>
+        </Suspense>
+      </CardContent>
+    </Card>
+  </motion.div>
+)}
       </div>
 
-      {showPhotoGallery && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
-          <Card className="shadow-lg rounded-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-indigo-200 to-indigo-300">
-              <CardTitle className="flex items-center"><ImageIcon className="mr-2" /> Photo Gallery</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <Suspense fallback={<Skeleton count={3} height={200} />}>
-              {galleryPhotos.length === 0 ? (
-                <p className="text-muted-foreground">No photos uploaded yet.</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {galleryPhotos.map((photo) => (
-                    <div key={photo.id} className="relative">
-                      <img src={photo.photo} alt="Gallery photo" className="h-48 rounded-lg" />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNowStrict(new Date(photo.date))} ago
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {isOwnProfile && canUploadPhoto && (
-                <div className="mt-4">
-                  <Label htmlFor="photo-upload" className="cursor-pointer">
-                    <Button variant="default" disabled={uploading} asChild>
-                      <label htmlFor="photo-upload">
-                        {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                        {uploading ? "Uploading..." : "Upload New Photo"}
-                      </label>
-                    </Button>
-                  </Label>
-                  <Input
-                    id="photo-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => e.target.files?.[0] && handlePhotoUpload(e.target.files[0])}
-                  />
-                </div>
-              )}
-              {isOwnProfile && !canUploadPhoto && galleryPhotos[0] && (
-                <p className="mt-4 text-sm text-muted-foreground">
-                  Next upload available {formatDistanceToNowStrict(addDays(new Date(galleryPhotos[0].date), 7), { addSuffix: true })}.
-                </p>
-              )}
-              </Suspense>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
-<div className="  space-y-6">
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold flex items-center gap-2">
-            {/* <Dumbbell className="h-6 w-6 text-blue-600" /> */}
-            Member Dashboard
-          </CardTitle>
-          <p className="text-muted-foreground">Track your workout progress and history</p>
-        </CardHeader>
-        <CardContent>
+      
+    <div className="  space-y-6">
+  
+      <Card className="shadow-lg  flex flex-col lg:flex-row gap-6 px-5">
           <Suspense fallback={<Skeleton height={300} />}>
-          <WorkoutTracker latestPlan={latestPlan} memberId={memberId || ''} />
+          <WorkoutTracker latestPlan={latestPlan} memberId={memberId || '' } />
           </Suspense>
-        </CardContent>
-      </Card>
-      <Card className="shadow-lg">
+        <Card className="shadow-lg lg:w-[65%] w-full">
         <CardHeader>
           <CardTitle className="text-xl font-semibold">Workout Progress History</CardTitle>
         </CardHeader>
@@ -2128,14 +2153,60 @@ if (!response.ok) {
                     </p>
                   </div>
                 </div>
+                
               )}
             </Suspense>
         </CardContent>
       </Card>
+      </Card>
     </div>
+    {showPhotoGallery && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
+          <Card className="shadow-lg rounded-xl overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-indigo-200 to-indigo-300">
+              <CardTitle className="flex items-center"><ImageIcon className="mr-2" /> Photo Gallery</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <Suspense fallback={<Skeleton count={4} height={200} />}>
+              {galleryPhotos.length === 0 ? (
+                <p className="text-muted-foreground">No photos uploaded yet.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-2">
+                  {galleryPhotos.map((photo) => (
+                    <div key={photo.id} className="relative">
+                      <img src={photo.photo} alt="Gallery photo" className="h-48 rounded-lg" />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatDistanceToNowStrict(new Date(photo.date))} ago
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {isOwnProfile && canUploadPhoto && (
+                <div className="mt-4">
+                  <Label htmlFor="photo-upload" className="cursor-pointer">
+                    <Button variant="default" disabled={uploading} asChild>
+                      <label htmlFor="photo-upload">
+                        {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                        {uploading ? "Uploading..." : "Upload New Photo"}
+                      </label>
+                    </Button>
+                  </Label>
+                  <Input
+                    id="photo-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && handlePhotoUpload(e.target.files[0])}
+                  />
+                </div>
+                )}
 
-
-      
+              </Suspense>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
     </motion.div>
   );
 }

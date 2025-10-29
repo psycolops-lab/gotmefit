@@ -336,12 +336,9 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
   if (!latestPlan || currentWorkout.length === 0 || isMember === null) {
     return (
       <Card className="shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100">
           <CardTitle className="flex items-center gap-2">
-            <Dumbbell className="h-5 w-5 text-blue-600" />
             Today&apos;s Workout
           </CardTitle>
-        </CardHeader>
         <CardContent className="pt-6">
           <div className="text-center py-8">
             <Dumbbell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -358,11 +355,10 @@ export default function WorkoutTracker({ latestPlan, memberId }: WorkoutTrackerP
   }
 
   return (
-    <Card className="shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100">
+    <Card className="shadow-lg w-full lg:w-[35%]">
+      <CardHeader >
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Dumbbell className="h-5 w-5 text-blue-600" />
             Today&apos;s Workout
           </CardTitle>
           <Badge variant="secondary" className="bg-blue-100 text-blue-800">

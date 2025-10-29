@@ -7,29 +7,26 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_SECRET
 );
 
-// Set the refresh token from env
 oauth2Client.setCredentials({
   refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
 });
 
 const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-// Input validation schema
 const eventSchema = z.object({
-  summary: z.string().min(1, 'Event title is required'),
+  summary: z.string().min(1),
   description: z.string().optional(),
   start: z.string().datetime(),
   end: z.string().datetime(),
   timeZone: z.string().default('UTC'),
-  attendeeEmail: z.string().email('Valid email is required'),
-  attendeeName: z.string().min(1, 'Name is required'),
+  attendeeEmail: z.string().email(),
+  attendeeName: z.string().min(1),
+  meetingType: z.enum(['online', 'offline']),
 });
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    
-    // Validate input
     const validation = eventSchema.safeParse(body);
     if (!validation.success) {
       return NextResponse.json(
@@ -38,55 +35,83 @@ export async function POST(request: Request) {
       );
     }
 
-    const { summary, description, start, end, timeZone, attendeeEmail, attendeeName } = validation.data;
-
-    // Check if time slot is available
-    const freeBusy = await calendar.freebusy.query({
-      requestBody: {
-        timeMin: start,
-        timeMax: end,
-        timeZone,
-        items: [{ id: process.env.GOOGLE_CALENDAR_ID }],
-      },
-    });
+    const {
+      summary,
+      description,
+      start,
+      end,
+      timeZone,
+      attendeeEmail,
+      attendeeName,
+      meetingType,
+    } = validation.data;
 
     const calendarId = process.env.GOOGLE_CALENDAR_ID;
-    if (!calendarId) {
-      throw new Error('GOOGLE_CALENDAR_ID is not set');
+    if (!calendarId || calendarId === 'primary') {
+      throw new Error('Set GOOGLE_CALENDAR_ID to trainer email (not "primary")');
     }
 
-    const calendarData = freeBusy.data.calendars?.[calendarId];
-    const isBusy = calendarData?.busy && calendarData.busy.length > 0;
-    
-    if (isBusy) {
+    // ---- FREE-BUSY WITH BUFFER ----
+    const bufferMs = 5 * 60 * 1000;
+    const timeMin = new Date(new Date(start).getTime() - bufferMs).toISOString();
+    const timeMax = new Date(new Date(end).getTime() + bufferMs).toISOString();
+
+    const freeBusy = await calendar.freebusy.query({
+      requestBody: { timeMin, timeMax, timeZone, items: [{ id: calendarId }] },
+    });
+
+    if (freeBusy.data.calendars?.[calendarId]?.busy?.length) {
       return NextResponse.json(
         { error: 'Selected time slot is not available' },
         { status: 409 }
       );
     }
 
-    // Create event
-    const event = {
+    // ---- ATTENDEES: Member + Host (calendar owner) ----
+    const attendees = [
+      { email: attendeeEmail, displayName: attendeeName, responseStatus: 'needsAction' },
+      { email: calendarId, displayName: 'Gym Trainer (Host)', responseStatus: 'accepted' }, // ← HOST
+    ];
+
+    // ---- EVENT PAYLOAD ----
+    const event: any = {
       summary,
-      description,
+      description: description ?? '',
       start: { dateTime: start, timeZone },
       end: { dateTime: end, timeZone },
-      attendees: [
-        { email: attendeeEmail, displayName: attendeeName },
-      ],
-      reminders: {
-        useDefault: true,
-      },
+      attendees,
+      reminders: { useDefault: true },
     };
 
-    if (!process.env.GOOGLE_CALENDAR_ID) {
-      throw new Error('GOOGLE_CALENDAR_ID is not set');
+    if (meetingType === 'online') {
+      event.conferenceData = {
+        createRequest: {
+          requestId: `meet-${Date.now()}`,
+          conferenceSolutionKey: { type: 'hangoutsMeet' },
+        },
+      };
     }
 
     const createdEvent = await calendar.events.insert({
-      calendarId: process.env.GOOGLE_CALENDAR_ID,
+      calendarId,
       requestBody: event,
-      sendUpdates: 'all',
+      conferenceDataVersion: meetingType === 'online' ? 1 : 0,
+      sendUpdates: 'all', // ← EMAILS BOTH
+    });
+
+    const meetLink = createdEvent.data.hangoutLink ?? '';
+
+    // ---- RETURN FORMATTED DATE FOR TOAST ----
+    const eventDate = new Date(start);
+    const formattedDate = eventDate.toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+    const formattedTime = eventDate.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
     });
 
     return NextResponse.json({
@@ -94,15 +119,17 @@ export async function POST(request: Request) {
       event: {
         id: createdEvent.data.id,
         htmlLink: createdEvent.data.htmlLink,
-        start: createdEvent.data.start,
-        end: createdEvent.data.end,
+        meetLink,
+        formattedDate,
+        formattedTime,
       },
     });
-  } catch (error) {
-    console.error('Error creating calendar event:', error);
+  } catch (error: any) {
+    console.error('Error:', error);
     return NextResponse.json(
-      { error: 'Failed to create calendar event' },
+      { error: 'Failed to create event' },
       { status: 500 }
     );
   }
 }
+//For scalability: Super Admin can create branch-specific calendars; pass calendarId dynamically via Member dashboard (e.g., based on assigned Trainer).

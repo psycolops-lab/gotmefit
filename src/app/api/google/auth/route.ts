@@ -30,3 +30,6 @@ export async function GET() {
   
   return redirect(authUrl);
 }
+
+
+//what chnge i did was here we are calling `${process.env.NEXT_PUBLIC_BASE_URL}/api/google/callback` where my base url is localhost3000 while in my oathplayround i actully put something else in authorized uri .
