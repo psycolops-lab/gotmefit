@@ -43,7 +43,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useRouter } from "next/navigation";
 import SearchAndSort from "@/components/SearchAndSort";
 import { Toaster, toast } from "react-hot-toast";
+import AppointmentBadge from "@/components/appointments/AppointmentBadge"; // ← NEW
 
+// === TYPES ===
 interface User {
   id: string;
   email: string;
@@ -63,12 +65,28 @@ interface User {
   nutritionist_id?: string;
   trainer?: User;
   nutritionist?: User;
+  member_profile_id?: string; // ← NEW
 }
 
+interface Appointment {
+  id: string;
+  member_id: string;
+  host_id: string;
+  host_type: string;
+  start_time: string;
+  end_time: string;
+  title: string;
+  meeting_type: 'online' | 'offline';
+  meet_link?: string | null;
+  appointment_notes?: { notes: string }[];
+}
+
+// === MAIN COMPONENT ===
 export default function AdminDashboard() {
   const [members, setMembers] = useState<User[]>([]);
   const [trainers, setTrainers] = useState<User[]>([]);
   const [nutritionists, setNutritionists] = useState<User[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]); // ← NEW
   const [selectedMember, setSelectedMember] = useState<User | null>(null);
   const [trainerAssignmentMember, setTrainerAssignmentMember] = useState<User | null>(null);
   const [nutritionistAssignmentMember, setNutritionistAssignmentMember] = useState<User | null>(null);
@@ -86,52 +104,45 @@ export default function AdminDashboard() {
 
   const router = useRouter();
 
+  // === FETCH USERS + MEMBER PROFILE IDS ===
   useEffect(() => {
     fetchUsers();
-  }, [router]);
+    fetchAppointments();
+  }, []);
 
   async function fetchUsers() {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
-        console.error("fetchUsers: Session error:", {
-          message: sessionError?.message,
-          code: sessionError?.code,
-          session: session ? { userId: session.user?.id, email: session.user?.email } : null,
-        });
         toast.error("Session expired. Please log in again.");
         router.push("/login");
         return;
       }
 
-      console.log("fetchUsers: Session retrieved:", {
-        userId: session.user.id,
-        email: session.user.email,
-        token: session.access_token.slice(0, 10) + "...",
-      });
-
       const res = await fetch("/api/users", {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
-      if (!res.ok) {
-        const errorData = await res.json();
-        console.error("fetchUsers: API error:", { status: res.status, error: errorData });
-        throw new Error(`Failed to fetch users: ${errorData.error || res.statusText}`);
-      }
+      if (!res.ok) throw new Error(`Failed to fetch users: ${await res.text()}`);
+
       const data = await res.json();
-      console.log("fetchUsers: Received data:", {
-        userCount: data.users?.length,
-        users: data.users?.map((u: any) => ({ id: u.id, email: u.email, role: u.role })),
-      });
-      
       const all = data.users || [];
       const membersList = all.filter((u: User) => u.role === "member");
       const trainersList = all.filter((u: User) => u.role === "trainer");
       const nutritionistsList = all.filter((u: User) => u.role === "nutritionist");
-      
-      setMembers(membersList);
+
+      // Attach member_profile_id
+      const membersWithProfile = await Promise.all(
+        membersList.map(async (m: any) => {
+          const { data } = await supabase
+            .from('member_profiles')
+            .select('id')
+            .eq('user_id', m.id)
+            .single();
+          return { ...m, member_profile_id: data?.id || null };
+        })
+      );
+
+      setMembers(membersWithProfile);
       setTrainers(trainersList);
       setNutritionists(nutritionistsList);
 
@@ -142,12 +153,32 @@ export default function AdminDashboard() {
         monthlyRevenue: 0,
       });
     } catch (err: any) {
-      console.error("Fetch users error:", err.message);
-      toast.error("Failed to load users. Please try again.");
+      toast.error("Failed to load users.");
     } finally {
       setLoading(false);
     }
   }
+
+  // === FETCH APPOINTMENTS ===
+  async function fetchAppointments() {
+    const { data, error } = await supabase
+      .from('appointments')
+      .select('*, appointment_notes(notes)')
+      .order('start_time', { ascending: false });
+
+    if (!error) setAppointments(data || []);
+  }
+
+  // === REAL-TIME: APPOINTMENTS & NOTES ===
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-appts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, fetchAppointments)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointment_notes' }, fetchAppointments)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const handleLoadMoreMembers = () => {
     setVisibleMembersCount(members.length);
@@ -158,11 +189,14 @@ export default function AdminDashboard() {
   };
 
   const handleAssignTrainerNutritionist = (member: User, role: "trainer" | "nutritionist") => {
-    if (role === "trainer") {
-      setTrainerAssignmentMember(member);
-    } else {
-      setNutritionistAssignmentMember(member);
-    }
+    if (role === "trainer") setTrainerAssignmentMember(member);
+    else setNutritionistAssignmentMember(member);
+  };
+
+  // === GET APPOINTMENT FOR MEMBER ===
+  const getMemberAppointment = (member: User): Appointment | undefined => {
+    if (!member.member_profile_id) return undefined;
+    return appointments.find(a => a.member_id === member.member_profile_id);
   };
 
   return (
@@ -230,6 +264,7 @@ export default function AdminDashboard() {
             <TabsTrigger value="nutritionists">Nutritionists</TabsTrigger>
           </TabsList>
 
+          {/* === MEMBERS TAB === */}
           <TabsContent value="members" className="space-y-4">
             <Card className="animate-slide-up">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -264,109 +299,126 @@ export default function AdminDashboard() {
                   render={(filtered) => (
                     <>
                       <div className="overflow-x-auto">
-                        <div className="grid grid-cols-6 gap-2 sm:gap-4 px-1 sm:px-2 py-2 font-semibold text-gray-700 bg-gray-200 rounded-md mb-2 min-w-[600px]">
+                        {/* HEADER: 7 COLUMNS */}
+                        <div className="grid grid-cols-7 gap-2 sm:gap-4 px-1 sm:px-2 py-2 font-semibold text-gray-700 bg-gray-200 rounded-md mb-2 min-w-[700px]">
                           <span className="text-xs sm:text-sm truncate">Member</span>
                           <span className="text-xs sm:text-sm truncate">Trainer</span>
                           <span className="text-xs sm:text-sm truncate">Nutritionist</span>
                           <span className="text-xs sm:text-sm truncate">Status</span>
+                          <span className="text-xs sm:text-sm truncate">Appointment</span>
                           <span className="text-xs sm:text-sm truncate"></span>
                           <span className="text-xs sm:text-sm truncate"></span>
                         </div>
 
+                        {/* ROWS */}
                         <div className="space-y-4">
                           {filtered.length === 0 ? (
-                            <p className="text-sm sm:text-base text-gray-500">
-                              No members found.
-                            </p>
+                            <p className="text-sm sm:text-base text-gray-500">No members found.</p>
                           ) : (
-                            filtered.slice(0, visibleMembersCount).map((member, index) => (
-                              <div
-                                key={member.id}
-                                className="grid grid-cols-6 items-center p-2 sm:p-3 dark:bg-gray-300 dark:hover:bg-gray-400 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer min-w-[600px]"
-                                style={{ animationDelay: `${index * 0.1}s` }}
-                                onClick={() => {
-                                  router.push(`/member/${member.id}`);
-                                }}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
-                                    <AvatarImage
-                                      src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${
-                                        1200000 + index
-                                      }.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`}
-                                    />
-                                    <AvatarFallback className="text-xs sm:text-sm">
-                                      {member.name?.substring(0, 2) || "M"}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <span className="font-semibold text-black text-xs sm:text-sm truncate">
-                                    {member.name || "—"}
-                                  </span>
-                                </div>
-                                <span className="text-xs sm:text-sm text-gray-700 truncate">
-                                  {member.trainer?.name || "Not assigned"}
-                                </span>
-                                <span className="text-xs sm:text-sm text-gray-700 truncate">
-                                  {member.nutritionist?.name || "Not assigned"}
-                                </span>
-                                <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">
-                                  Active
-                                </Badge>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  title="View member info"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleViewMemberProfile(member);
-                                  }}
-                                  className="h-7 w-7 sm:h-8 sm:w-8"
+                            filtered.slice(0, visibleMembersCount).map((member, index) => {
+                              const appt = getMemberAppointment(member);
+                              return (
+                                <div
+                                  key={member.id}
+                                  className="grid grid-cols-7 items-center p-2 sm:p-3 dark:bg-gray-300 dark:hover:bg-gray-400 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors cursor-pointer min-w-[700px]"
+                                  style={{ animationDelay: `${index * 0.1}s` }}
+                                  onClick={() => router.push(`/member/${member.id}`)}
                                 >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      title="Assign trainer or nutritionist"
-                                      className="h-7 w-7 sm:h-8 sm:w-8"
-                                    >
-                                      <UserPlus className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent>
-                                    <DropdownMenuItem
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAssignTrainerNutritionist(member, "trainer");
-                                      }}
-                                    >
-                                      Assign Trainer
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAssignTrainerNutritionist(member, "nutritionist");
-                                      }}
-                                    >
-                                      Assign Nutritionist
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-                            ))
+                                  {/* Member */}
+                                  <div className="flex items-center gap-2">
+                                    <Avatar className="h-8 w-8 sm:h-10 sm:w-10">
+                                      <AvatarImage
+                                        src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`}
+                                      />
+                                      <AvatarFallback className="text-xs sm:text-sm">
+                                        {member.name?.substring(0, 2) || "M"}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <span className="font-semibold text-black text-xs sm:text-sm truncate">
+                                      {member.name || "—"}
+                                    </span>
+                                  </div>
+                                  {/* Trainer */}
+                                  <span className="text-xs sm:text-sm text-gray-700 truncate">
+                                    {member.trainer?.name || "Not assigned"}
+                                  </span>
+
+                                  {/* Nutritionist */}
+                                  <span className="text-xs sm:text-sm text-gray-700 truncate">
+                                    {member.nutritionist?.name || "Not assigned"}
+                                  </span>
+
+                                  {/* Status */}
+                                  <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">
+                                    Active
+                                  </Badge>
+                                  {/* Appointment Badge */}
+                                  <div className="flex justify-center">
+                                    {appt ? (
+                                      <AppointmentBadge
+                                        appointment={appt}
+                                        onAddNotes={() => {}}
+                                      />
+                                    ) : (
+                                      <span className="text-xs text-gray-400">—</span>
+                                    )}
+                                  </div>
+
+                                  {/* View */}
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    title="View member info"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleViewMemberProfile(member);
+                                    }}
+                                    className="h-7 w-7 sm:h-8 sm:w-8"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+
+                                  {/* Assign */}
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="icon"
+                                        title="Assign trainer or nutritionist"
+                                        className="h-7 w-7 sm:h-8 sm:w-8"
+                                      >
+                                        <UserPlus className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleAssignTrainerNutritionist(member, "trainer");
+                                        }}
+                                      >
+                                        Assign Trainer
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleAssignTrainerNutritionist(member, "nutritionist");
+                                        }}
+                                      >
+                                        Assign Nutritionist
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              );
+                            })
                           )}
                         </div>
                       </div>
 
                       {filtered.length > 4 && visibleMembersCount < filtered.length && (
                         <div className="flex justify-center mt-4 sm:mt-6">
-                          <Button
-                            variant="outline"
-                            onClick={handleLoadMoreMembers}
-                            className="text-sm sm:text-base"
-                          >
+                          <Button variant="outline" onClick={handleLoadMoreMembers} className="text-sm sm:text-base">
                             Load More Members
                           </Button>
                         </div>
@@ -378,6 +430,7 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
+          {/* === TRAINERS TAB (unchanged) === */}
           <TabsContent value="trainers" className="space-y-4">
             <Card className="animate-slide-up">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -416,9 +469,7 @@ export default function AdminDashboard() {
                             <div className="flex items-center space-x-3 sm:space-x-4 w-full sm:w-auto">
                               <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
                                 <AvatarImage
-                                  src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${
-                                    1200000 + index
-                                  }.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`}
+                                  src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`}
                                 />
                                 <AvatarFallback className="text-sm">
                                   {trainer.name?.substring(0, 2) || "T"}
@@ -460,10 +511,7 @@ export default function AdminDashboard() {
                               </div>
 
                               <div className="text-center sm:text-right">
-                                <Badge
-                                  variant="default"
-                                  className="bg-green-600 text-xs sm:text-sm"
-                                >
+                                <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">
                                   Active
                                 </Badge>
                                 <p className="text-xs sm:text-sm text-gray-600">
@@ -474,11 +522,7 @@ export default function AdminDashboard() {
                                 </p>
                               </div>
 
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8 sm:h-9 sm:w-9"
-                              >
+                              <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </div>
@@ -492,6 +536,7 @@ export default function AdminDashboard() {
             </Card>
           </TabsContent>
 
+          {/* === NUTRITIONISTS TAB (unchanged) === */}
           <TabsContent value="nutritionists" className="space-y-4">
             <Card className="animate-slide-up">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -530,9 +575,7 @@ export default function AdminDashboard() {
                             <div className="flex items-center space-x-3 sm:space-x-4 w-full sm:w-auto">
                               <Avatar className="h-10 w-10 sm:h-12 sm:w-12">
                                 <AvatarImage
-                                  src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${
-                                    1200000 + index
-                                  }.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`}
+                                  src={`https://images.pexels.com/photos/${1200000 + index}/pexels-photo-${1200000 + index}.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`}
                                 />
                                 <AvatarFallback className="text-sm">
                                   {nutritionist.name?.substring(0, 2) || "N"}
@@ -574,10 +617,7 @@ export default function AdminDashboard() {
                               </div>
 
                               <div className="text-center sm:text-right">
-                                <Badge
-                                  variant="default"
-                                  className="bg-green-600 text-xs sm:text-sm"
-                                >
+                                <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">
                                   Active
                                 </Badge>
                                 <p className="text-xs sm:text-sm text-gray-600">
@@ -588,11 +628,7 @@ export default function AdminDashboard() {
                                 </p>
                               </div>
 
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8 sm:h-9 sm:w-9"
-                              >
+                              <Button variant="outline" size="icon" className="h-8 w-8 sm:h-9 sm:w-9">
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </div>
@@ -608,10 +644,13 @@ export default function AdminDashboard() {
         </Tabs>
       )}
 
+      {/* === DIALOGS === */}
       <Dialog open={!!selectedMember} onOpenChange={() => setSelectedMember(null)}>
         <DialogContent className="w-full max-w-full sm:max-w-lg md:max-w-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Member Profile - {selectedMember?.name || selectedMember?.email}</DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">
+              Member Profile - {selectedMember?.name || selectedMember?.email}
+            </DialogTitle>
           </DialogHeader>
           {selectedMember && <MemberProfileView member={selectedMember} />}
         </DialogContent>
@@ -619,18 +658,13 @@ export default function AdminDashboard() {
 
       <Dialog open={!!trainerAssignmentMember} onOpenChange={() => setTrainerAssignmentMember(null)}>
         <DialogContent className="w-full max-w-full sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Assign Trainer</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle className="text-base sm:text-lg">Assign Trainer</DialogTitle></DialogHeader>
           {trainerAssignmentMember && (
             <AssignmentForm
               member={trainerAssignmentMember}
               trainers={trainers}
               nutritionists={[]}
-              onSuccess={() => {
-                fetchUsers();
-                setTrainerAssignmentMember(null);
-              }}
+              onSuccess={() => { fetchUsers(); setTrainerAssignmentMember(null); }}
             />
           )}
         </DialogContent>
@@ -638,18 +672,13 @@ export default function AdminDashboard() {
 
       <Dialog open={!!nutritionistAssignmentMember} onOpenChange={() => setNutritionistAssignmentMember(null)}>
         <DialogContent className="w-full max-w-full sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Assign Nutritionist</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle className="text-base sm:text-lg">Assign Nutritionist</DialogTitle></DialogHeader>
           {nutritionistAssignmentMember && (
             <AssignmentForm
               member={nutritionistAssignmentMember}
               trainers={[]}
               nutritionists={nutritionists}
-              onSuccess={() => {
-                fetchUsers();
-                setNutritionistAssignmentMember(null);
-              }}
+              onSuccess={() => { fetchUsers(); setNutritionistAssignmentMember(null); }}
             />
           )}
         </DialogContent>

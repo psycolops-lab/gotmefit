@@ -21,7 +21,7 @@ import toast, { Toaster } from "react-hot-toast";
 import PlanExpirationReminder from "@/components/PlanExpirationReminder";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
+import AppointmentsList from '@/components/appointments/AppointmentsList';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DonutChart from '@/components/DonutChart';
 import AnimatedDonutChart from '@/components/AnimatedDonutChart';
@@ -222,6 +222,33 @@ const parseQuantity = (qtyStr: string): number => {
   const match = qtyStr.match(/(\d+\.?\d*)/); // Extract number (e.g., "100" from "100gm")
   return match ? parseFloat(match[0]) : 1; // Default to 1 if invalid
 };
+const [hasProfile, setHasProfile] = useState(false);
+
+  useEffect(() => {
+    const checkProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error('Please log in');
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('member_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error || !data) {
+        toast.error('Complete your profile to book appointments');
+      } else {
+        setHasProfile(true);
+      }
+      setLoading(false);
+    };
+
+    checkProfile();
+  }, []);
 
   // Define steps dynamically based on missing profile fields
   const getDynamicSteps = (profile: MemberProfile | null) => {
@@ -1405,6 +1432,7 @@ if (!response.ok) {
         >
           &#8592; Back to {userRole === 'member' ? 'Member' : userRole === 'trainer' ? 'Trainer' : userRole === 'nutritionist' ? 'Nutritionist' : 'Admin'} Dashboard
         </Button>
+        <AppointmentsList />
         {/* {isOwnProfile && (
           <Button
             variant="default"
@@ -1424,7 +1452,16 @@ if (!response.ok) {
           </Button>
         )} */}
       </div>
-      
+      <Button
+      onClick={() => {
+            if (userRole === 'member') {
+              router.push(`/member/book`);
+            }
+          }}
+        className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+      >
+        Book Appointment 
+      </Button>
 
       <Dialog open={showSetupModal} onOpenChange={(open) => {
         if (!open) {

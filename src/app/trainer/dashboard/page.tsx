@@ -48,6 +48,10 @@ import {
 import { useRouter } from 'next/navigation';
 import { WorkoutCreationForm } from '@/components/WorkoutCreationForm';
 
+// === NEW: IMPORT APPOINTMENT COMPONENTS ===
+import AppointmentBadge from '@/components/appointments/AppointmentBadge';
+import AppointmentNotesModal from '@/components/appointments/AppointmentNotesModal';
+
 type Member = {
   id: string;
   user_id: string;
@@ -63,6 +67,7 @@ type Member = {
   latest_weight?: number | null;
   latest_bmi?: number | null;
   latest_updated?: string | null;
+  appointments: any[] | null; // ← ADDED: Always array
 };
 
 type WeightHistory = {
@@ -92,6 +97,12 @@ export default function TrainerDashboardPage() {
   const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
   const [chartData, setChartData] = useState<WeightChartData[]>([]);
   const router = useRouter();
+
+  // === NEW: NOTES MODAL STATE ===
+  const [notesModal, setNotesModal] = useState<{ open: boolean; apptId: string; notes?: string }>({
+    open: false,
+    apptId: '',
+  });
 
   useEffect(() => {
     loadMembers();
@@ -178,6 +189,27 @@ export default function TrainerDashboardPage() {
         latestWeights = Array.from(weightMap.values());
       }
 
+      // === NEW: FETCH APPOINTMENTS ===
+            // === NEW: FETCH APPOINTMENTS ===
+      const { data: rawAppointments, error: apptError } = await supabase
+        .from('appointments')
+        .select('*, appointment_notes(notes)')
+        .eq('host_id', trainerId)
+        .order('start_time', { ascending: false });
+
+      if (apptError) {
+        console.error('Appointments load error:', apptError);
+      }
+
+      const appointments = rawAppointments ?? [];
+
+      const apptMap = new Map<string, any[]>();
+      appointments.forEach(appt => {
+        const mid = appt.member_id;
+        if (!apptMap.has(mid)) apptMap.set(mid, []);
+        apptMap.get(mid)!.push(appt);
+      });
+
       const mergedMembers: Member[] = memberProfiles.map(member => {
         const userDetail = userDetails?.find(u => u.id === member.user_id);
         const latestWeight = latestWeights.find(wh => wh.member_id === member.user_id);
@@ -197,6 +229,7 @@ export default function TrainerDashboardPage() {
           latest_weight: latestWeight?.weight_kg ?? member.weight_kg,
           latest_bmi: latestWeight?.bmi ?? member.bmi,
           latest_updated: latestWeight?.recorded_at ?? member.updated_at,
+          appointments: apptMap.get(member.user_id) || [], // ← NEVER null
         };
       });
 
@@ -208,36 +241,59 @@ export default function TrainerDashboardPage() {
     }
   }
 
-  const handleCreateWorkout = async (plan: any, assignedTo: string) => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    console.log('TrainerDashboard - Session for API call:', session);
-    if (!session) {
-      toast.error('Not authenticated. Please log in.');
-      router.push('/login');
-      return;
-    }
+  // === NEW: REALTIME SUBSCRIPTION ===
+  useEffect(() => {
+    const channel = supabase
+      .channel('trainer-appts')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, loadMembers)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointment_notes' }, loadMembers)
+      .subscribe();
 
-    const response = await fetch('/api/workout/create', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ assigned_to: assignedTo, plan }),
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // === NEW: OPEN NOTES MODAL ===
+  const openNotes = (apptId: string) => {
+    const appt = members.flatMap(m => m.appointments).find(a => a.id === apptId);
+    setNotesModal({
+      open: true,
+      apptId,
+      notes: appt?.appointment_notes?.[0]?.notes,
     });
+  };
 
-    if (!response.ok) {
-      const { error } = await response.json();
-      throw new Error(error);
+  const handleCreateWorkout = async (plan: any, assignedTo: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log('TrainerDashboard - Session for API call:', session);
+      if (!session) {
+        toast.error('Not authenticated. Please log in.');
+        router.push('/login');
+        return;
+      }
+
+      const response = await fetch('/api/workout/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ assigned_to: assignedTo, plan }),
+      });
+
+      if (!response.ok) {
+        const { error } = await response.json();
+        throw new Error(error);
+      }
+
+      toast.success('Workout assigned successfully');
+      setShowWorkoutModal(null);
+    } catch (error: any) {
+      toast.error(`Failed to assign workout: ${error.message}`);
     }
-
-    toast.success('Workout assigned successfully');
-    setShowWorkoutModal(null);
-  } catch (error: any) {
-    toast.error(`Failed to assign workout: ${error.message}`);
-  }
-};
+  };
 
   async function loadWeightHistory(memberId: string) {
     try {
@@ -445,6 +501,7 @@ export default function TrainerDashboardPage() {
                     <TableHead>Height</TableHead>
                     <TableHead>Goal</TableHead>
                     <TableHead>Last Updated</TableHead>
+                    <TableHead>Appointments</TableHead> {/* ← NEW */}
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -516,6 +573,24 @@ export default function TrainerDashboardPage() {
                               : 'Never'}
                           </div>
                         </TableCell>
+
+                        {/* === NEW: APPOINTMENTS BADGES === */}
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {(member.appointments ?? []).length > 0 ? (
+                              (member.appointments ?? []).map((appt) => (
+                                <AppointmentBadge
+                                  key={appt.id}
+                                  appointment={appt}
+                                  onAddNotes={() => openNotes(appt.id)} 
+                                />
+                              ))
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
+                            )}
+                          </div>
+                        </TableCell>
+
                         <TableCell className="text-right space-x-2">
                           <Button
                             size="sm"
@@ -737,6 +812,15 @@ export default function TrainerDashboardPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* === NEW: NOTES MODAL === */}
+      <AppointmentNotesModal
+        open={notesModal.open}
+        onClose={() => setNotesModal({ ...notesModal, open: false })}
+        appointmentId={notesModal.apptId}
+        existingNotes={notesModal.notes}
+        onSaved={loadMembers}
+      />
     </motion.div>
   );
 }
