@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Scale, Ruler, Target, Activity, User, Apple, BarChart2, Upload, Image as ImageIcon, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Loader2, Scale, Ruler,  Target, Activity, User, Apple, BarChart2, Upload, Image as ImageIcon, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { formatDistanceToNowStrict, addDays, isAfter } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -117,14 +117,28 @@ export default function MemberDashboardPage() {
   const [showDietUpdateModal, setShowDietUpdateModal] = useState(false);
   const [newWeight, setNewWeight] = useState("");
   const [currentStep, setCurrentStep] = useState(0);
+  const [newHeight, setNewHeight] = useState("");
+const [showHeightUpdateModal, setShowHeightUpdateModal] = useState(false);
   const [workouts, setWorkouts] = useState<WorkoutPlan[]>([]);
   const [formData, setFormData] = useState({
-    gender: "",
-    height_cm: 170,
-    weight_kg: 70,
-    goal: "",
-    activity_level: "",
+    gender: profile?.gender || "",
+    height_cm: profile?.height_cm || 170,
+    weight_kg: profile?.weight_kg || 70,
+    goal: profile?.goal || "",
+    activity_level: profile?.activity_level || "",
   });
+
+  useEffect(() => {
+    if (profile) {
+      setFormData(prev => ({
+        gender: profile.gender || prev.gender,
+        height_cm: profile.height_cm ?? prev.height_cm,
+        weight_kg: profile.weight_kg ?? prev.weight_kg,
+        goal: profile.goal || prev.goal,
+        activity_level: profile.activity_level || prev.activity_level,
+      }));
+    }
+  }, [profile]);
   const [isOwnProfile, setIsOwnProfile] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [canUploadPhoto, setCanUploadPhoto] = useState(true);
@@ -962,6 +976,47 @@ useEffect(() => {
       setLoading(false);
     }
   }
+  async function handleHeightUpdate() {
+  if (!newHeight || isNaN(Number(newHeight)) || Number(newHeight) < 100 || Number(newHeight) > 250) {
+    toast.error("Please enter a valid height (100–250 cm)");
+    return;
+  }
+
+  setLoading(true);
+  setError(null);
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      toast.error("Authentication required");
+      return;
+    }
+
+    const response = await fetch("/api/member/update_profile", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ height_cm: Number(newHeight) }),
+    });
+
+    if (response.ok) {
+      setShowHeightUpdateModal(false);
+      setNewHeight("");
+      await refreshData();
+      toast.success("Height updated successfully!");
+    } else {
+      const result = await response.json();
+      toast.error(result.error || "Failed to update height");
+    }
+  } catch (error: any) {
+    toast.error("An unexpected error occurred.");
+    console.error("Height update error:", error);
+  } finally {
+    setLoading(false);
+  }
+}
 
   async function handlePhotoUpload(file: File) {
   if (!file || !isOwnProfile) {
@@ -999,14 +1054,10 @@ useEffect(() => {
     if (memberId !== session.user.id) {
       throw new Error("Unauthorized: memberId does not match authenticated user");
     }
-
-    // 🚫 Removed the 7-day restriction check completely
-
     // ✅ Upload file to Supabase Storage
     const fileExt = file.name.split(".").pop();
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `gallery/${session.user.id}/${fileName}`;
-
     const { error: uploadError } = await supabase.storage
       .from("gallery")
       .upload(filePath, file, { contentType: file.type });
@@ -1015,11 +1066,8 @@ useEffect(() => {
       console.error("Storage upload error details:", uploadError);
       throw new Error(`Storage upload failed: ${uploadError.message}`);
     }
-
     const { data: { publicUrl } } = supabase.storage.from("gallery").getPublicUrl(filePath);
-
     if (!publicUrl) throw new Error("Failed to get public URL for uploaded file");
-
     // ✅ Insert uploaded photo record into DB
     const { error: insertError } = await supabase
       .from("gallery")
@@ -1551,6 +1599,56 @@ if (!response.ok) {
           </Button>
         </DialogContent>
       </Dialog>
+      <Dialog open={showHeightUpdateModal} onOpenChange={setShowHeightUpdateModal}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>Update Height</DialogTitle>
+      <DialogDescription>
+        Enter your current height in centimeters.
+      </DialogDescription>
+    </DialogHeader>
+    <div className="space-y-4">
+      <Label htmlFor="new-height">Height (cm)</Label>
+      <Input
+        id="new-height"
+        type="number"
+        placeholder="e.g. 175"
+        value={newHeight}
+        onChange={(e) => setNewHeight(e.target.value)}
+        min="100"
+        max="250"
+        step="1"
+      />
+      <div className="text-xs text-muted-foreground">
+        Valid range: 100 – 250 cm
+      </div>
+    </div>
+    <div className="flex justify-end gap-3 mt-4">
+      <Button
+        variant="outline"
+        onClick={() => {
+          setShowHeightUpdateModal(false);
+          setNewHeight("");
+        }}
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={handleHeightUpdate}
+        disabled={!newHeight || Number(newHeight) < 100 || Number(newHeight) > 250 || loading}
+      >
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Saving...
+          </>
+        ) : (
+          "Save Height"
+        )}
+      </Button>
+    </div>
+  </DialogContent>
+</Dialog>
 
       <Dialog open={showMissedDietModal} onOpenChange={setShowMissedDietModal}>
         <DialogContent>
@@ -1733,21 +1831,47 @@ if (!response.ok) {
               </Card>
             </motion.div>
 
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }} whileHover={{ scale: 1.02, y: -4 }} className=" cursor-pointer">
-              <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden
-                  bg-teal-50  
-                   transition-all duration-300
-                   border border-gray-100 
-                   hover:shadow-xl hover:scale-[1.005] hover:border-teal-300 dark:bg-[#0e182b] dark:border-none">
-                <CardHeader className="pb-0">
-                  <CardTitle className="flex items-center text-xl font-medium text-teal-500"><Ruler className="mr-2" /> Height</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <div className="text-sm text-muted-foreground mt-1">Height</div>
-                  <div className="mt-3 font-semibold">{profile?.height_cm ? `${profile.height_cm} cm` : "—"}</div>
-                </CardContent>
-              </Card>
-            </motion.div>
+            <motion.div
+  initial={{ scale: 0.95 }}
+  animate={{ scale: 1 }}
+  transition={{ duration: 0.3, delay: 0.2 }}
+  whileHover={{ scale: 1.02, y: -4 }}
+  className="cursor-pointer"
+>
+  <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden
+      bg-teal-50
+       transition-all duration-300
+       border border-gray-100
+       hover:shadow-xl hover:scale-[1.005] hover:border-teal-300 dark:bg-[#0e182b] dark:border-none">
+    <CardHeader className="pb-0">
+      <CardTitle className="flex items-center text-xl font-medium text-teal-500">
+        <Ruler className="mr-2" /> Height
+      </CardTitle>
+    </CardHeader>
+    <CardContent className="pt-4">
+      <div className="text-sm text-muted-foreground mt-1">Current Height</div>
+      <div className="flex justify-between items-center text-sm">
+        <div className="mt-3 font-semibold text-lg">
+          {profile?.height_cm ? `${profile.height_cm} cm` : "—"}
+        </div>
+        <div className="mt-2 flex">
+          {(isOwnProfile || userRole === 'trainer') && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => {
+                setNewHeight(profile?.height_cm?.toString() || "");
+                setShowHeightUpdateModal(true);
+              }}
+            >
+              Update
+            </Button>
+          )}
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+</motion.div>
 
             <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }} whileHover={{ scale: 1.02, y: -4 }} className=" cursor-pointer">
               <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -24,12 +24,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -39,13 +39,31 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useRouter } from "next/navigation";
 import SearchAndSort from "@/components/SearchAndSort";
 import { Toaster, toast } from "react-hot-toast";
-import AppointmentBadge from "@/components/appointments/AppointmentBadge"; // ← NEW
+import AppointmentBadge from "@/components/appointments/AppointmentBadge";
 
-// === TYPES ===
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+
+/* ====================== TYPES ====================== */
 interface User {
   id: string;
   email: string;
@@ -65,7 +83,7 @@ interface User {
   nutritionist_id?: string;
   trainer?: User;
   nutritionist?: User;
-  member_profile_id?: string; // ← NEW
+  member_profile_id?: string;
 }
 
 interface Appointment {
@@ -76,17 +94,17 @@ interface Appointment {
   start_time: string;
   end_time: string;
   title: string;
-  meeting_type: 'online' | 'offline';
+  meeting_type: "online" | "offline";
   meet_link?: string | null;
   appointment_notes?: { notes: string }[];
 }
 
-// === MAIN COMPONENT ===
+/* ====================== MAIN COMPONENT ====================== */
 export default function AdminDashboard() {
   const [members, setMembers] = useState<User[]>([]);
   const [trainers, setTrainers] = useState<User[]>([]);
   const [nutritionists, setNutritionists] = useState<User[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]); // ← NEW
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [selectedMember, setSelectedMember] = useState<User | null>(null);
   const [trainerAssignmentMember, setTrainerAssignmentMember] = useState<User | null>(null);
   const [nutritionistAssignmentMember, setNutritionistAssignmentMember] = useState<User | null>(null);
@@ -104,15 +122,13 @@ export default function AdminDashboard() {
 
   const router = useRouter();
 
-  // === FETCH USERS + MEMBER PROFILE IDS ===
-  useEffect(() => {
-    fetchUsers();
-    fetchAppointments();
-  }, []);
-
-  async function fetchUsers() {
+  /* ------------------- FETCH USERS ------------------- */
+  const fetchUsers = useCallback(async () => {
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
         toast.error("Session expired. Please log in again.");
         router.push("/login");
@@ -124,21 +140,20 @@ export default function AdminDashboard() {
       });
       if (!res.ok) throw new Error(`Failed to fetch users: ${await res.text()}`);
 
-      const data = await res.json();
-      const all = data.users || [];
-      const membersList = all.filter((u: User) => u.role === "member");
-      const trainersList = all.filter((u: User) => u.role === "trainer");
-      const nutritionistsList = all.filter((u: User) => u.role === "nutritionist");
+      const { users = [] } = await res.json();
 
-      // Attach member_profile_id
+      const membersList = users.filter((u: User) => u.role === "member");
+      const trainersList = users.filter((u: User) => u.role === "trainer");
+      const nutritionistsList = users.filter((u: User) => u.role === "nutritionist");
+
       const membersWithProfile = await Promise.all(
         membersList.map(async (m: any) => {
           const { data } = await supabase
-            .from('member_profiles')
-            .select('id')
-            .eq('user_id', m.id)
+            .from("member_profiles")
+            .select("id")
+            .eq("user_id", m.id)
             .single();
-          return { ...m, member_profile_id: data?.id || null };
+          return { ...m, member_profile_id: data?.id ?? null };
         })
       );
 
@@ -154,51 +169,60 @@ export default function AdminDashboard() {
       });
     } catch (err: any) {
       toast.error("Failed to load users.");
+      console.error(err);
     } finally {
       setLoading(false);
     }
-  }
+  }, [router]);
 
-  // === FETCH APPOINTMENTS ===
-  async function fetchAppointments() {
+  /* ------------------- FETCH APPOINTMENTS ------------------- */
+  const fetchAppointments = useCallback(async () => {
     const { data, error } = await supabase
-      .from('appointments')
-      .select('*, appointment_notes(notes)')
-      .order('start_time', { ascending: false });
+      .from("appointments")
+      .select("*, appointment_notes(notes)")
+      .order("start_time", { ascending: false });
 
-    if (!error) setAppointments(data || []);
-  }
-
-  // === REAL-TIME: APPOINTMENTS & NOTES ===
-  useEffect(() => {
-    const channel = supabase
-      .channel('admin-appts')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, fetchAppointments)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointment_notes' }, fetchAppointments)
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    if (!error) setAppointments(data ?? []);
   }, []);
 
-  const handleLoadMoreMembers = () => {
-    setVisibleMembersCount(members.length);
-  };
+  useEffect(() => {
+    fetchUsers();
+    fetchAppointments();
+  }, [fetchUsers, fetchAppointments]);
 
-  const handleViewMemberProfile = (member: User) => {
-    setSelectedMember(member);
-  };
+  /* ------------------- REALTIME ------------------- */
+  useEffect(() => {
+    const channel = supabase
+      .channel("admin-appts")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        fetchAppointments
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointment_notes" },
+        fetchAppointments
+      )
+      .subscribe();
 
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchAppointments]);
+
+  const handleLoadMoreMembers = () => setVisibleMembersCount(members.length);
+  const handleViewMemberProfile = (member: User) => setSelectedMember(member);
   const handleAssignTrainerNutritionist = (member: User, role: "trainer" | "nutritionist") => {
     if (role === "trainer") setTrainerAssignmentMember(member);
     else setNutritionistAssignmentMember(member);
   };
-
-  // === GET APPOINTMENT FOR MEMBER ===
   const getMemberAppointment = (member: User): Appointment | undefined => {
     if (!member.member_profile_id) return undefined;
-    return appointments.find(a => a.member_id === member.member_profile_id);
+    return appointments.find((a) => a.member_id === member.member_profile_id);
   };
 
+  /* ------------------- RENDER ------------------- */
   return (
     <div className="min-h-screen pt-16 px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
       <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
@@ -233,7 +257,7 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="animate-scale-in" style={{ animationDelay: '0.1s' }}>
+        <Card className="animate-scale-in" style={{ animationDelay: "0.1s" }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium">Trainers</CardTitle>
             <UserCheck className="h-4 w-4 text-muted-foreground" />
@@ -243,7 +267,7 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="animate-scale-in" style={{ animationDelay: '0.2s' }}>
+        <Card className="animate-scale-in" style={{ animationDelay: "0.2s" }}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs sm:text-sm font-medium">Nutritionists</CardTitle>
             <Utensils className="h-4 w-4 text-muted-foreground" />
@@ -281,8 +305,10 @@ export default function AdminDashboard() {
                       role="member"
                       trainers={trainers}
                       nutritionists={nutritionists}
-                      onSuccess={fetchUsers}
-                      onClose={() => setIsMemberDialogOpen(false)}
+                      onSuccess={() => {
+                        fetchUsers();
+                        setIsMemberDialogOpen(false);
+                      }}
                     />
                   </DialogContent>
                 </Dialog>
@@ -299,7 +325,7 @@ export default function AdminDashboard() {
                   render={(filtered) => (
                     <>
                       <div className="overflow-x-auto">
-                        {/* HEADER: 7 COLUMNS */}
+                        {/* HEADER */}
                         <div className="grid grid-cols-7 gap-2 sm:gap-4 px-1 sm:px-2 py-2 font-semibold text-gray-700 bg-gray-200 rounded-md mb-2 min-w-[700px]">
                           <span className="text-xs sm:text-sm truncate">Member</span>
                           <span className="text-xs sm:text-sm truncate">Trainer</span>
@@ -338,6 +364,7 @@ export default function AdminDashboard() {
                                       {member.name || "—"}
                                     </span>
                                   </div>
+
                                   {/* Trainer */}
                                   <span className="text-xs sm:text-sm text-gray-700 truncate">
                                     {member.trainer?.name || "Not assigned"}
@@ -352,13 +379,11 @@ export default function AdminDashboard() {
                                   <Badge variant="default" className="bg-green-600 text-xs sm:text-sm">
                                     Active
                                   </Badge>
-                                  {/* Appointment Badge */}
+
+                                  {/* Appointment */}
                                   <div className="flex justify-center">
                                     {appt ? (
-                                      <AppointmentBadge
-                                        appointment={appt}
-                                        onAddNotes={() => {}}
-                                      />
+                                      <AppointmentBadge appointment={appt} onAddNotes={() => {}} />
                                     ) : (
                                       <span className="text-xs text-gray-400">—</span>
                                     )}
@@ -443,7 +468,13 @@ export default function AdminDashboard() {
                     <DialogHeader>
                       <DialogTitle className="text-base sm:text-lg">Create New Trainer</DialogTitle>
                     </DialogHeader>
-                    <CreateUserForm role="trainer" onSuccess={fetchUsers} onClose={() => setIsTrainerDialogOpen(false)} />
+                    <CreateUserForm
+                      role="trainer"
+                      onSuccess={() => {
+                        fetchUsers();
+                        setIsTrainerDialogOpen(false);
+                      }}
+                    />
                   </DialogContent>
                 </Dialog>
               </CardHeader>
@@ -549,7 +580,13 @@ export default function AdminDashboard() {
                     <DialogHeader>
                       <DialogTitle className="text-base sm:text-lg">Create New Nutritionist</DialogTitle>
                     </DialogHeader>
-                    <CreateUserForm role="nutritionist" onSuccess={fetchUsers} onClose={() => setIsNutritionistDialogOpen(false)} />
+                    <CreateUserForm
+                      role="nutritionist"
+                      onSuccess={() => {
+                        fetchUsers();
+                        setIsNutritionistDialogOpen(false);
+                      }}
+                    />
                   </DialogContent>
                 </Dialog>
               </CardHeader>
@@ -658,13 +695,18 @@ export default function AdminDashboard() {
 
       <Dialog open={!!trainerAssignmentMember} onOpenChange={() => setTrainerAssignmentMember(null)}>
         <DialogContent className="w-full max-w-full sm:max-w-md">
-          <DialogHeader><DialogTitle className="text-base sm:text-lg">Assign Trainer</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">Assign Trainer</DialogTitle>
+          </DialogHeader>
           {trainerAssignmentMember && (
             <AssignmentForm
               member={trainerAssignmentMember}
               trainers={trainers}
               nutritionists={[]}
-              onSuccess={() => { fetchUsers(); setTrainerAssignmentMember(null); }}
+              onSuccess={() => {
+                fetchUsers();
+                setTrainerAssignmentMember(null);
+              }}
             />
           )}
         </DialogContent>
@@ -672,13 +714,18 @@ export default function AdminDashboard() {
 
       <Dialog open={!!nutritionistAssignmentMember} onOpenChange={() => setNutritionistAssignmentMember(null)}>
         <DialogContent className="w-full max-w-full sm:max-w-md">
-          <DialogHeader><DialogTitle className="text-base sm:text-lg">Assign Nutritionist</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">Assign Nutritionist</DialogTitle>
+          </DialogHeader>
           {nutritionistAssignmentMember && (
             <AssignmentForm
               member={nutritionistAssignmentMember}
               trainers={[]}
               nutritionists={nutritionists}
-              onSuccess={() => { fetchUsers(); setNutritionistAssignmentMember(null); }}
+              onSuccess={() => {
+                fetchUsers();
+                setNutritionistAssignmentMember(null);
+              }}
             />
           )}
         </DialogContent>
@@ -687,33 +734,88 @@ export default function AdminDashboard() {
   );
 }
 
-/* ------------------- Create User Form ------------------- */
+/* ====================== CREATE USER FORM – FIXED & ENHANCED ====================== */
+const memberSchema = z.object({
+  name: z.string().optional(),
+  email: z.string().email("Invalid email"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  phone: z.string().optional(),
+  height_cm: z.coerce.number().positive().optional(),
+  weight_kg: z.coerce.number().positive().optional(),
+  plan: z.enum(["none", "yearly", "half-yearly", "quarterly"]).optional(),
+  dob: z.string().optional(),
+  gender: z.enum(["none", "male", "female", "other"]).optional(),
+  trainer_id: z.string().optional(),
+  nutritionist_id: z.string().optional(),
+});
+
+const staffSchema = z.object({
+  name: z.string().optional(),
+  email: z.string().email("Invalid email"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+type MemberFormValues = z.infer<typeof memberSchema>;
+type StaffFormValues = z.infer<typeof staffSchema>;
+
 interface CreateUserFormProps {
-  role: string;
+  role: "member" | "trainer" | "nutritionist";
   trainers?: User[];
   nutritionists?: User[];
   onSuccess?: () => void;
-  onClose?: () => void;
 }
 
-function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess, onClose }: CreateUserFormProps) {
+function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess }: CreateUserFormProps) {
+  const isMember = role === "member";
+  const schema = isMember ? memberSchema : staffSchema;
+
+  const form = useForm<MemberFormValues | StaffFormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      phone: "",
+      height_cm: undefined,
+      weight_kg: undefined,
+      plan: "none",
+      dob: "",
+      gender: "none",
+      trainer_id: "none",     // Use "none" instead of ""
+      nutritionist_id: "none", // Use "none" instead of ""
+    },
+  });
+
   const [loading, setLoading] = useState(false);
-  const [selectedTrainer, setSelectedTrainer] = useState<string>("");
-  const [selectedNutritionist, setSelectedNutritionist] = useState<string>("");
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  const onSubmit = async (values: any) => {
     setLoading(true);
-
-    const formData = new FormData(e.currentTarget as HTMLFormElement);
-    const body = Object.fromEntries(formData.entries());
-
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
-        toast.error("Session expired. Please log in again.");
+        toast.error("Session expired.");
         return;
       }
+
+      const payload: any = {
+        email: values.email,
+        password: values.password,
+        name: values.name || null,
+        role,
+        ...(isMember && {
+          height_cm: values.height_cm ?? null,
+          weight_kg: values.weight_kg ?? null,
+          plan: values.plan === "none" ? null : values.plan,
+          dob: values.dob ?? null,
+          gender: values.gender === "none" ? null : values.gender,
+          phone: values.phone ?? null,
+          trainer_id: values.trainer_id === "none" ? null : values.trainer_id,
+          nutritionist_id: values.nutritionist_id === "none" ? null : values.nutritionist_id,
+        }),
+      };
 
       const res = await fetch("/api/users/create", {
         method: "POST",
@@ -721,154 +823,260 @@ function CreateUserForm({ role, trainers = [], nutritionists = [], onSuccess, on
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          email: body.email,
-          password: body.password,
-          name: body.name || null,
-          role,
-          height_cm: body.height_cm || null,
-          weight_kg: body.weight_kg || null,
-          plan: body.plan || null,
-          dob: body.dob || null,
-          gender: body.gender || null,
-          trainer_id: selectedTrainer && selectedTrainer !== "none" ? selectedTrainer : null,
-          nutritionist_id: selectedNutritionist && selectedNutritionist !== "none" ? selectedNutritionist : null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        toast.error(`Failed to create user: ${errorData.error || "Unknown error"}`);
+        const err = await res.json();
+        toast.error(err.error ?? "Failed to create user");
         return;
       }
 
-      toast.success(`${role} created successfully!`);
+      toast.success(`${role} created!`);
       onSuccess?.();
-      onClose?.();
-    } catch (err: any) {
-      toast.error(`Failed to create user: ${err.message || "Unexpected error"}`);
+    } catch (e: any) {
+      toast.error(e.message ?? "Unexpected error");
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="name" className="text-sm sm:text-base">Name (Optional)</Label>
-            <Input name="name" placeholder="Full Name" className="text-sm sm:text-base" />
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+        <div className="grid gap-5 sm:grid-cols-2">
+          {/* LEFT COLUMN */}
+          <div className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name (optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Full name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email *</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="you@example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password *</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="••••••••" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {isMember && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone (optional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="+1 234 567 890" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="height_cm"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Height (cm)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="170" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="weight_kg"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Weight (kg)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="70" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
           </div>
-          <div>
-            <Label htmlFor="email" className="text-sm sm:text-base">Email *</Label>
-            <Input type="email" name="email" placeholder="you@example.com" required className="text-sm sm:text-base" />
-          </div>
-          <div>
-            <Label htmlFor="password" className="text-sm sm:text-base">Password *</Label>
-            <Input type="password" name="password" placeholder="••••••••" required className="text-sm sm:text-base" />
-          </div>
-          {role === "member" && (
-            <>
-              <div>
-                <Label htmlFor="phone" className="text-sm sm:text-base">Phone (Optional)</Label>
-                <Input name="phone" placeholder="Phone Number" className="text-sm sm:text-base" />
-              </div>
-              <div>
-                <Label htmlFor="height_cm" className="text-sm sm:text-base">Height (cm)</Label>
-                <Input type="number" name="height_cm" id="height_cm" className="input text-sm sm:text-base" />
-              </div>
-              <div>
-                <Label htmlFor="weight_kg" className="text-sm sm:text-base">Weight (kg)</Label>
-                <Input type="number" name="weight_kg" id="weight_kg" className="input text-sm sm:text-base" />
-              </div>
-            </>
+
+          {/* RIGHT COLUMN – ONLY FOR MEMBERS */}
+          {isMember && (
+            <div className="space-y-4">
+              {/* PLAN */}
+              <FormField
+                control={form.control}
+                name="plan"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Plan</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select plan" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="yearly">Yearly</SelectItem>
+                        <SelectItem value="half-yearly">Half-Yearly</SelectItem>
+                        <SelectItem value="quarterly">Quarterly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* DOB */}
+              <FormField
+                control={form.control}
+                name="dob"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Date of Birth</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* GENDER */}
+              <FormField
+                control={form.control}
+                name="gender"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Gender</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select gender" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* TRAINER – FIXED: value="none" */}
+              <FormField
+                control={form.control}
+                name="trainer_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assign Trainer (optional)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select trainer" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">No trainer</SelectItem>
+                        {trainers.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name ?? t.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* NUTRITIONIST – FIXED: value="none" */}
+              <FormField
+                control={form.control}
+                name="nutritionist_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assign Nutritionist (optional)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select nutritionist" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">No nutritionist</SelectItem>
+                        {nutritionists.map((n) => (
+                          <SelectItem key={n.id} value={n.id}>
+                            {n.name ?? n.email}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
           )}
         </div>
-        <div className="space-y-4">
-          {role === "member" && (
-            <>
-              <div>
-                <Label htmlFor="plan" className="text-sm sm:text-base">Plan</Label>
-                <select
-                  name="plan"
-                  id="plan"
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-sm sm:text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm"
-                >
-                  <option value="">Select Plan</option>
-                  <option value="yearly">Yearly</option>
-                  <option value="half-yearly">Half-Yearly</option>
-                  <option value="quarterly">Quarterly</option>
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="dob" className="text-sm sm:text-base">Date of Birth</Label>
-                <Input type="date" name="dob" id="dob" className="input text-sm sm:text-base" />
-              </div>
-              <div>
-                <Label htmlFor="gender" className="text-sm sm:text-base">Gender</Label>
-                <select
-                  name="gender"
-                  id="gender"
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-sm sm:text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md shadow-sm"
-                >
-                  <option value="">Select Gender</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div>
-                <Label className="text-sm sm:text-base">Assign Trainer</Label>
-                <Select value={selectedTrainer} onValueChange={setSelectedTrainer}>
-                  <SelectTrigger className="text-sm sm:text-base">
-                    <SelectValue placeholder="Select a trainer (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No trainer</SelectItem>
-                    {trainers.map((trainer) => (
-                      <SelectItem key={trainer.id} value={trainer.id}>
-                        {trainer.name || trainer.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-sm sm:text-base">Assign Nutritionist</Label>
-                <Select value={selectedNutritionist} onValueChange={setSelectedNutritionist}>
-                  <SelectTrigger className="text-sm sm:text-base">
-                    <SelectValue placeholder="Select a nutritionist (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No nutritionist</SelectItem>
-                    {nutritionists.map((nutritionist) => (
-                      <SelectItem key={nutritionist.id} value={nutritionist.id}>
-                        {nutritionist.name || nutritionist.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-      <Button type="submit" className="w-full text-sm sm:text-base" disabled={loading}>
-        {loading ? `Creating ${role}...` : `Create ${role}`}
-      </Button>
-    </form>
+
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? `Creating ${role}…` : `Create ${role}`}
+        </Button>
+      </form>
+    </Form>
   );
 }
 
-/* ------------------- Member Profile View ------------------- */
+/* ====================== MEMBER PROFILE VIEW (unchanged) ====================== */
 function MemberProfileView({ member }: { member: User }) {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row items-center space-x-0 sm:space-x-4 space-y-3 sm:space-y-0">
         <Avatar className="h-16 w-16 sm:h-20 sm:w-20">
           <AvatarImage src={`https://images.pexels.com/photos/1200000/pexels-photo-1200000.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop`} />
-          <AvatarFallback className="text-base sm:text-lg">{member.name?.substring(0, 2) || 'M'}</AvatarFallback>
+          <AvatarFallback className="text-base sm:text-lg">{member.name?.substring(0, 2) || "M"}</AvatarFallback>
         </Avatar>
         <div className="text-center sm:text-left">
           <h2 className="text-xl sm:text-2xl font-bold">{member.name || "Name not provided"}</h2>
@@ -909,7 +1117,7 @@ function MemberProfileView({ member }: { member: User }) {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Weight:</span>
-              <span>{member.profile?.weight_kg ? `${member.profile.weight_kg} kg` : "Not provided"}</span>
+              <span>{member.profile?.weight_kg ? `${member.profile?.weight_kg} kg` : "Not provided"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">BMI:</span>
@@ -934,7 +1142,7 @@ function MemberProfileView({ member }: { member: User }) {
             {member.trainer ? (
               <div className="flex items-center space-x-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback className="text-xs">{member.trainer.name?.substring(0, 2) || 'T'}</AvatarFallback>
+                  <AvatarFallback className="text-xs">{member.trainer.name?.substring(0, 2) || "T"}</AvatarFallback>
                 </Avatar>
                 <div>
                   <p className="font-medium text-xs sm:text-sm">{member.trainer.name || "Unnamed Trainer"}</p>
@@ -954,7 +1162,7 @@ function MemberProfileView({ member }: { member: User }) {
             {member.nutritionist ? (
               <div className="flex items-center space-x-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarFallback className="text-xs">{member.nutritionist.name?.substring(0, 2) || 'N'}</AvatarFallback>
+                  <AvatarFallback className="text-xs">{member.nutritionist.name?.substring(0, 2) || "N"}</AvatarFallback>
                 </Avatar>
                 <div>
                   <p className="font-medium text-xs sm:text-sm">{member.nutritionist.name || "Unnamed Nutritionist"}</p>
@@ -981,17 +1189,17 @@ function MemberProfileView({ member }: { member: User }) {
   );
 }
 
-/* ------------------- Assignment Form ------------------- */
-function AssignmentForm({ 
-  member, 
-  trainers, 
-  nutritionists, 
-  onSuccess 
-}: { 
-  member: User; 
-  trainers: User[]; 
-  nutritionists: User[]; 
-  onSuccess: () => void; 
+/* ====================== ASSIGNMENT FORM (unchanged) ====================== */
+function AssignmentForm({
+  member,
+  trainers,
+  nutritionists,
+  onSuccess,
+}: {
+  member: User;
+  trainers: User[];
+  nutritionists: User[];
+  onSuccess: () => void;
 }) {
   const [selectedTrainer, setSelectedTrainer] = useState<string>(member.trainer_id || "");
   const [selectedNutritionist, setSelectedNutritionist] = useState<string>(member.nutritionist_id || "");

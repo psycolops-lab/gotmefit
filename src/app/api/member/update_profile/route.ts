@@ -8,27 +8,18 @@ export async function POST(req: Request) {
     const { height_cm, weight_kg, gender, goal, activity_level } = body;
 
     // Validate minimal requirements
-    if (typeof height_cm !== 'number' || typeof weight_kg !== 'number') {
-      return NextResponse.json({ 
-        error: "height_cm and weight_kg must be numbers" 
-      }, { status: 400 });
+        // ── NEW: Allow height OR weight (not both required) ──
+    if (height_cm !== undefined && (typeof height_cm !== 'number' || height_cm < 100 || height_cm > 250)) {
+      return NextResponse.json({ error: "Height must be 100–250 cm" }, { status: 400 });
+    }
+    if (weight_kg !== undefined && (typeof weight_kg !== 'number' || weight_kg < 30 || weight_kg > 200)) {
+      return NextResponse.json({ error: "Weight must be 30–200 kg" }, { status: 400 });
+    }
+    if (height_cm === undefined && weight_kg === undefined) {
+      return NextResponse.json({ error: "Send height_cm or weight_kg" }, { status: 400 });
     }
 
-    if (height_cm < 100 || height_cm > 250) {
-      return NextResponse.json({ 
-        error: "Height must be between 100cm and 250cm" 
-      }, { status: 400 });
-    }
-
-    if (weight_kg < 30 || weight_kg > 200) {
-      return NextResponse.json({ 
-        error: "Weight must be between 30kg and 200kg" 
-      }, { status: 400 });
-    }
-
-    // Compute BMI server-side
-    const h_m = height_cm / 100;
-    const bmi = h_m > 0 ? Number((weight_kg / (h_m * h_m)).toFixed(2)) : null;
+    
 
     // Get user from auth token
     const authHeader = (req.headers.get("authorization") || "").replace("Bearer ", "");
@@ -42,18 +33,36 @@ export async function POST(req: Request) {
     }
     
     const userId = userData.user.id;
+        
+    const { data: current } = await supabaseAdmin
+      .from("member_profiles")
+      .select("height_cm, weight_kg")
+      .eq("user_id", userId)
+      .single();
+          // ── SMART BMI: Use sent values OR existing ──
+    const finalHeight = height_cm ?? current?.height_cm;
+    const finalWeight = weight_kg ?? current?.weight_kg;
+
+    let bmi: number | null = null;
+    if (finalHeight && finalWeight) {
+      const h_m = finalHeight / 100;
+      bmi = Number((finalWeight / (h_m * h_m)).toFixed(2));
+    }
 
     // Prepare upsert object for member_profiles
-    const upsertObj = {
+        // ── UPSERT: Only update what was sent ──
+    const upsertObj: any = {
       user_id: userId,
-      height_cm,
-      weight_kg,
+      height_cm: finalHeight,
+      weight_kg: finalWeight,
       bmi,
-      gender: gender || null,
-      goal: goal || null,
-      activity_level: activity_level || null,
       updated_at: new Date().toISOString(),
     };
+
+    // Preserve existing gender/goal/activity_level
+    if (gender !== undefined) upsertObj.gender = gender;
+    if (goal !== undefined) upsertObj.goal = goal;
+    if (activity_level !== undefined) upsertObj.activity_level = activity_level;
 
     // Upsert member_profiles
     const { data: upserted, error: upsertErr } = await supabaseAdmin

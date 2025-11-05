@@ -1,4 +1,3 @@
-// src/app/login/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -16,12 +15,14 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { motion } from "framer-motion";
+import { Eye, EyeOff } from "lucide-react"; // Eye icons
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // Toggle state
   const router = useRouter();
 
   async function handleLogin(e: React.FormEvent) {
@@ -71,13 +72,13 @@ export default function Login() {
       } else if (role === "admin") {
         console.log("Redirecting to /admin/dashboard");
         router.push("/admin/dashboard");
-      }else if (role === "member") {
+      } else if (role === "member") {
         console.log("Redirecting to /member/" + userId);
-  router.push(`/member/${userId}`);
-      }else if (role === "trainer") {
+        router.push(`/member/${userId}`);
+      } else if (role === "trainer") {
         console.log("Redirecting to /trainer/dashboard");
         router.push("/trainer/dashboard");
-      }else if (role === "nutritionist") {
+      } else if (role === "nutritionist") {
         console.log("Redirecting to /nutritionist/dashboard");
         router.push("/nutritionist/dashboard");
       } else {
@@ -118,17 +119,33 @@ export default function Login() {
                       required
                     />
                   </div>
-                  <div>
+
+                  {/* Password Field with Eye Toggle */}
+                  <div className="relative">
                     <Label htmlFor="password">Password</Label>
                     <Input
                       id="password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
+                      className="pr-10" // Make room for icon
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-6 text-gray-500 hover:text-gray-700 transition-colors"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
                   </div>
+
                   {error && <p className="text-red-500 text-sm">{error}</p>}
                   <Button className="w-full" disabled={loading}>
                     {loading ? "Logging in..." : "Login"}
@@ -141,6 +158,8 @@ export default function Login() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Right Side - Marketing */}
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
