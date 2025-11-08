@@ -14,12 +14,15 @@ type Appointment = {
   host_type: string;
   meeting_type: "online" | "offline";
   meet_link?: string | null;
-  appointment_notes?: { notes: string }[];
+  host_id: string; // ✅ added
+  member_id: string; // ✅ added
+  appointment_notes?: { notes: string; added_by?: string }[];
 };
 
 export default function AppointmentsList() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [memberProfileId, setMemberProfileId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null); // ✅ new
   const [notesModal, setNotesModal] = useState({
     open: false,
     apptId: "",
@@ -27,7 +30,7 @@ export default function AppointmentsList() {
   });
 
   /* -----------------------------
-     1️⃣ Get member_profile.id 
+     1️⃣ Get member_profile.id and user.id
   ------------------------------*/
   useEffect(() => {
     const fetchProfile = async () => {
@@ -35,6 +38,7 @@ export default function AppointmentsList() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
+      setUserId(user.id); // ✅ store user id
 
       const { data } = await supabase
         .from("member_profiles")
@@ -49,53 +53,50 @@ export default function AppointmentsList() {
   }, []);
 
   /* -----------------------------
-     2️⃣ Load appointments once profile ID exists 
+     2️⃣ Load appointments for host or member
   ------------------------------*/
   const loadAppointments = async () => {
-    if (!memberProfileId) return; // ✅ do nothing until profile loaded
+    if (!userId && !memberProfileId) return;
 
-    const { data } = await supabase
+    let query = supabase
       .from("appointments")
-      .select("*, appointment_notes(notes)")
-      .eq("member_id", memberProfileId)
+      .select("*, appointment_notes(id, notes, added_by)")
       .order("start_time", { ascending: false });
 
+    if (memberProfileId) {
+      // Logged-in user is a member
+      query = query.eq("member_id", memberProfileId);
+    } else if (userId) {
+      // Logged-in user is a host (trainer/nutritionist/admin)
+      query = query.eq("host_id", userId);
+    }
+
+    const { data } = await query;
     if (data) setAppointments(data);
   };
 
   useEffect(() => {
-    if (!memberProfileId) return;
-
-    const load = async () => {
-      const { data } = await supabase
-        .from("appointments")
-        .select("*, appointment_notes(notes)")
-        .eq("member_id", memberProfileId)
-        .order("start_time", { ascending: false });
-
-      if (data) setAppointments(data);
-    };
-
-    load();
+    if (!userId && !memberProfileId) return;
+    loadAppointments();
 
     const channel = supabase
       .channel("member-appts")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "appointments" },
-        load
+        loadAppointments
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "appointment_notes" },
-        load
+        loadAppointments
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel); // ✅ Sync cleanup only
+      supabase.removeChannel(channel);
     };
-  }, [memberProfileId]);
+  }, [userId, memberProfileId]);
 
   /* ----------------------------- */
   const openNotes = (apptId: string) => {
@@ -148,7 +149,7 @@ export default function AppointmentsList() {
 
               <AppointmentBadge
                 appointment={appt}
-                onAddNotes={() => openNotes(appt.id)} // ✅ pass appt.id manually
+                onAddNotes={() => openNotes(appt.id)} // ✅ unchanged
               />
             </div>
           ))

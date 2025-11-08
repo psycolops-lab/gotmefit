@@ -7,12 +7,12 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'images.unsplash.com', // The final destination of the image
+        hostname: 'images.unsplash.com', 
         pathname: '/**',
       },
       {
         protocol: 'https',
-        hostname: 'unsplash.com', // Base domain, just in case
+        hostname: 'unsplash.com', 
         pathname: '/**',
       },
       {
@@ -20,6 +20,10 @@ const nextConfig = {
         // *** YOU MUST ADD THIS HOSTNAME ***
         hostname: 'source.unsplash.com', 
         pathname: '/**',
+      },
+      {
+        protocol: "https",
+        hostname: "neayamvolewefmuldteq.supabase.co",
       },
     ],
   },

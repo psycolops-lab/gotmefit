@@ -1,32 +1,81 @@
 "use client";
-import Image from 'next/image';
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import React, { useEffect, useMemo, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle,  DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Scale, Ruler,  Target, Activity, User, Apple, BarChart2, Upload, Image as ImageIcon, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import {
+  Loader2,
+  Scale,
+  Ruler,
+  Target,
+  Activity,
+  User,
+  Apple,
+  BarChart2,
+  Upload,
+  Image as ImageIcon,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+} from "lucide-react";
 import { formatDistanceToNowStrict, addDays, isAfter } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 import { useParams, useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
 import PlanExpirationReminder from "@/components/PlanExpirationReminder";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import AppointmentsList from '@/components/appointments/AppointmentsList';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import DonutChart from '@/components/DonutChart';
-import AnimatedDonutChart from '@/components/AnimatedDonutChart';
-import Skeleton from 'react-loading-skeleton';
-import WorkoutTracker from '@/components/WorkoutTracker';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import AppointmentsList from "@/components/appointments/AppointmentsList";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import DonutChart from "@/components/DonutChart";
+import AnimatedDonutChart from "@/components/AnimatedDonutChart";
+import Skeleton from "react-loading-skeleton";
+import WorkoutTracker from "@/components/WorkoutTracker";
+import ContactHosts from "@/components/ContactHosts";
+import { FileUpload } from "@/components/ui/file-upload";
 
 type MemberProfile = {
   user_id: string;
@@ -118,7 +167,7 @@ export default function MemberDashboardPage() {
   const [newWeight, setNewWeight] = useState("");
   const [currentStep, setCurrentStep] = useState(0);
   const [newHeight, setNewHeight] = useState("");
-const [showHeightUpdateModal, setShowHeightUpdateModal] = useState(false);
+  const [showHeightUpdateModal, setShowHeightUpdateModal] = useState(false);
   const [workouts, setWorkouts] = useState<WorkoutPlan[]>([]);
   const [formData, setFormData] = useState({
     gender: profile?.gender || "",
@@ -130,7 +179,7 @@ const [showHeightUpdateModal, setShowHeightUpdateModal] = useState(false);
 
   useEffect(() => {
     if (profile) {
-      setFormData(prev => ({
+      setFormData((prev) => ({
         gender: profile.gender || prev.gender,
         height_cm: profile.height_cm ?? prev.height_cm,
         weight_kg: profile.weight_kg ?? prev.weight_kg,
@@ -143,47 +192,59 @@ const [showHeightUpdateModal, setShowHeightUpdateModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [canUploadPhoto, setCanUploadPhoto] = useState(true);
   const [updatingMeal, setUpdatingMeal] = useState<string | null>(null);
-  const [todayMealStatus, setTodayMealStatus] = useState<{ [key: string]: boolean }>({});
-  const [userRole, setUserRole] = useState<'member' | 'trainer' | 'nutritionist' | 'admin' | null>(null);
+  const [todayMealStatus, setTodayMealStatus] = useState<{
+    [key: string]: boolean;
+  }>({});
+  const [userRole, setUserRole] = useState<
+    "member" | "trainer" | "nutritionist" | "admin" | null
+  >(null);
   const [workoutHistory, setWorkoutHistory] = useState<any[]>([]);
-// const [timeRange, setTimeRange] = useState<string>('7_days');
-// const [customValue, setCustomValue] = useState<string>('');
-const [customUnit, setCustomUnit] = useState<string>('days');
+  // const [timeRange, setTimeRange] = useState<string>('7_days');
+  // const [customValue, setCustomValue] = useState<string>('');
+  const [customUnit, setCustomUnit] = useState<string>("days");
   const [newDietPlan, setNewDietPlan] = useState<Meal[]>([
     { name: "Meal 1", items: [{ name: "", quantity: "" }] },
   ]);
   const [updatingDietPlan, setUpdatingDietPlan] = useState(false);
-  const [selectedRange, setSelectedRange] = useState('last_7_days');
-const [customNumber, setCustomNumber] = useState('1');
-const [currentWorkout, setCurrentWorkout] = useState<any[]>([]);
-const [latestPlan, setLatestPlan] = useState<any>(null);
-const [isAssignedTrainer, setIsAssignedTrainer] = useState(false);
-const rangeOptions = [
-  { value: 'last_1_days', label: 'Last 1 day' },
-  { value: 'last_3_days', label: 'Last 3 days' },
-  { value: 'last_7_days', label: 'Last 7 days' },
-  { value: 'last_2_weeks', label: 'Last 2 weeks' },
-  { value: 'last_4_weeks', label: 'Last 4 weeks' },
-  { value: 'last_3_months', label: 'Last 3 months' },
-  { value: 'last_6_months', label: 'Last 6 months' },
-  { value: 'custom', label: 'Custom' },
-];
-const handleRangeChange = (value: string) => {
-  setSelectedRange(value);
-};
-  const getExerciseNames = (workout: any[]) => {
-    if (!workout || !Array.isArray(workout)) return 'No exercises recorded';
-    const names = workout.map(ex => ex.name).filter(name => name);
-    return names.length > 0 ? names.join(', ') : 'No exercises recorded';
+  const [selectedRange, setSelectedRange] = useState("last_7_days");
+  const [customNumber, setCustomNumber] = useState("1");
+  const [currentWorkout, setCurrentWorkout] = useState<any[]>([]);
+  const [latestPlan, setLatestPlan] = useState<any>(null);
+  const [isAssignedTrainer, setIsAssignedTrainer] = useState(false);
+  const rangeOptions = [
+    { value: "last_1_days", label: "Last 1 day" },
+    { value: "last_3_days", label: "Last 3 days" },
+    { value: "last_7_days", label: "Last 7 days" },
+    { value: "last_2_weeks", label: "Last 2 weeks" },
+    { value: "last_4_weeks", label: "Last 4 weeks" },
+    { value: "last_3_months", label: "Last 3 months" },
+    { value: "last_6_months", label: "Last 6 months" },
+    { value: "custom", label: "Custom" },
+  ];
+  const handleRangeChange = (value: string) => {
+    setSelectedRange(value);
   };
-    const calculateOverallProgress = () => {
+  const getExerciseNames = (workout: any[]) => {
+    if (!workout || !Array.isArray(workout)) return "No exercises recorded";
+    const names = workout.map((ex) => ex.name).filter((name) => name);
+    return names.length > 0 ? names.join(", ") : "No exercises recorded";
+  };
+  const calculateOverallProgress = () => {
     if (workoutHistory.length === 0) return 0;
-    const totalPercentage = workoutHistory.reduce((sum, item) => sum + item.completion_percentage, 0);
+    const totalPercentage = workoutHistory.reduce(
+      (sum, item) => sum + item.completion_percentage,
+      0
+    );
     return Math.round(totalPercentage / workoutHistory.length);
   };
   const overallProgress = calculateOverallProgress();
   const [nutritionData, setNutritionData] = useState<any[]>([]);
-  const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein: 0, carbs: 0, fats: 0 });
+  const [dailyTotals, setDailyTotals] = useState({
+    calories: 0,
+    protein: 0,
+    carbs: 0,
+    fats: 0,
+  });
   const [fetchError, setFetchError] = useState(null);
 
   const goalOptions = [
@@ -205,56 +266,72 @@ const handleRangeChange = (value: string) => {
   const activityOptions = ["Basic", "Intermediate", "Advanced"];
 
   // Dynamic meal image mapping
-const mealImageMap: { [key: string]: string } = {
-    breakfast: 'https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75', // Healthy bowl with fruit, seeds, and yogurt
-    lunch: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',   // Fresh salad with vegetables and protein
-    dinner: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',   // Plate with salmon and vegetables
-    snack: 'https://images.unsplash.com/photo-1496412705862-e0088f16f791?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',    // Fresh fruit and nuts/seeds
-    'meal 1': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',   // Meal prep container with balanced meal
-    'meal 2': 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',   // Healthy chicken and vegetables
-    'meal 3': 'https://images.unsplash.com/photo-1518791841217-8f162f1e1131?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75',   // Clean eating bowl with grains and greens
+  const mealImageMap: { [key: string]: string } = {
+    breakfast:
+      "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75", // Healthy bowl with fruit, seeds, and yogurt
+    lunch:
+      "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75", // Fresh salad with vegetables and protein
+    dinner:
+      "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75", // Plate with salmon and vegetables
+    snack:
+      "https://images.unsplash.com/photo-1496412705862-e0088f16f791?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75", // Fresh fruit and nuts/seeds
+    "meal 1":
+      "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75", // Meal prep container with balanced meal
+    "meal 2":
+      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75", // Healthy chicken and vegetables
+    "meal 3":
+      "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75", // Clean eating bowl with grains and greens
   };
   const getMealName = (mealKey: any) => {
-    if (!mealKey || typeof mealKey !== 'string') {
-      console.warn('Invalid mealKey:', mealKey);
-      return 'Unknown Meal';
+    if (!mealKey || typeof mealKey !== "string") {
+      console.warn("Invalid mealKey:", mealKey);
+      return "Unknown Meal";
     }
     const mealNames: { [key: string]: string } = {
-      Meal_1: 'Breakfast',
-      Meal_2: 'Lunch',
-      Meal_3: 'Dinner',
+      Meal_1: "Breakfast",
+      Meal_2: "Lunch",
+      Meal_3: "Dinner",
     };
-    const sanitizedKey = mealKey.trim().replace(/[_-]/g, ' ').toLowerCase();
-    return mealNames[mealKey] || sanitizedKey.charAt(0).toUpperCase() + sanitizedKey.slice(1);
+    const sanitizedKey = mealKey.trim().replace(/[_-]/g, " ").toLowerCase();
+    return (
+      mealNames[mealKey] ||
+      sanitizedKey.charAt(0).toUpperCase() + sanitizedKey.slice(1)
+    );
   };
 
   const getMealImage = (mealKey: any) => {
     const name = getMealName(mealKey).toLowerCase();
-    return mealImageMap[name] || mealImageMap['meal 1'] || 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75';
+    return (
+      mealImageMap[name] ||
+      mealImageMap["meal 1"] ||
+      "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&h=300&q=75"
+    );
   };
-const parseQuantity = (qtyStr: string): number => {
-  const match = qtyStr.match(/(\d+\.?\d*)/); // Extract number (e.g., "100" from "100gm")
-  return match ? parseFloat(match[0]) : 1; // Default to 1 if invalid
-};
-const [hasProfile, setHasProfile] = useState(false);
+  const parseQuantity = (qtyStr: string): number => {
+    const match = qtyStr.match(/(\d+\.?\d*)/); // Extract number (e.g., "100" from "100gm")
+    return match ? parseFloat(match[0]) : 1; // Default to 1 if invalid
+  };
+  const [hasProfile, setHasProfile] = useState(false);
 
   useEffect(() => {
     const checkProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
-        toast.error('Please log in');
+        toast.error("Please log in");
         setLoading(false);
         return;
       }
 
       const { data, error } = await supabase
-        .from('member_profiles')
-        .select('id')
-        .eq('user_id', user.id)
+        .from("member_profiles")
+        .select("id")
+        .eq("user_id", user.id)
         .single();
 
       if (error || !data) {
-        toast.error('Complete your profile to book appointments');
+        toast.error("Complete your profile to book appointments");
       } else {
         setHasProfile(true);
       }
@@ -272,7 +349,11 @@ const [hasProfile, setHasProfile] = useState(false);
         title: "Tell us about yourself",
         content: (
           <div className="space-y-4">
-            <ToggleGroup type="single" value={formData.gender} onValueChange={(v) => setFormData({ ...formData, gender: v })}>
+            <ToggleGroup
+              type="single"
+              value={formData.gender}
+              onValueChange={(v) => setFormData({ ...formData, gender: v })}
+            >
               <ToggleGroupItem value="male" className="flex-1">
                 <User className="mr-2" /> Male
               </ToggleGroupItem>
@@ -295,9 +376,13 @@ const [hasProfile, setHasProfile] = useState(false);
               max={250}
               step={1}
               value={[formData.height_cm]}
-              onValueChange={(v) => setFormData({ ...formData, height_cm: v[0] })}
+              onValueChange={(v) =>
+                setFormData({ ...formData, height_cm: v[0] })
+              }
             />
-            <div className="text-center font-semibold">{formData.height_cm} cm</div>
+            <div className="text-center font-semibold">
+              {formData.height_cm} cm
+            </div>
           </div>
         ),
         isValid: () => formData.height_cm > 0,
@@ -313,9 +398,13 @@ const [hasProfile, setHasProfile] = useState(false);
               max={150}
               step={0.1}
               value={[formData.weight_kg]}
-              onValueChange={(v) => setFormData({ ...formData, weight_kg: v[0] })}
+              onValueChange={(v) =>
+                setFormData({ ...formData, weight_kg: v[0] })
+              }
             />
-            <div className="text-center font-semibold">{formData.weight_kg.toFixed(1)} kg</div>
+            <div className="text-center font-semibold">
+              {formData.weight_kg.toFixed(1)} kg
+            </div>
           </div>
         ),
         isValid: () => formData.weight_kg > 0,
@@ -325,7 +414,10 @@ const [hasProfile, setHasProfile] = useState(false);
       steps.push({
         title: "What is your goal?",
         content: (
-          <Select value={formData.goal} onValueChange={(v) => setFormData({ ...formData, goal: v })}>
+          <Select
+            value={formData.goal}
+            onValueChange={(v) => setFormData({ ...formData, goal: v })}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select goal" />
             </SelectTrigger>
@@ -345,7 +437,12 @@ const [hasProfile, setHasProfile] = useState(false);
       steps.push({
         title: "What is your physical activity level?",
         content: (
-          <Select value={formData.activity_level} onValueChange={(v) => setFormData({ ...formData, activity_level: v })}>
+          <Select
+            value={formData.activity_level}
+            onValueChange={(v) =>
+              setFormData({ ...formData, activity_level: v })
+            }
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select level" />
             </SelectTrigger>
@@ -364,53 +461,61 @@ const [hasProfile, setHasProfile] = useState(false);
     return steps;
   };
 
-useEffect(() => {
-  let mounted = true;
+  useEffect(() => {
+    let mounted = true;
 
-  async function load() {
-    setLoading(true);
-    setError(null);
+    async function load() {
+      setLoading(true);
+      setError(null);
 
-    try {
-      // ✅ Check session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session) {
-        setError("Session expired. Please log in again.");
-        router.push("/login");
-        return;
-      }
+      try {
+        // ✅ Check session
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+        if (sessionError || !session) {
+          setError("Session expired. Please log in again.");
+          router.push("/login");
+          return;
+        }
 
-      const loggedInUserId = session.user.id;
-      setIsOwnProfile(memberId === loggedInUserId);
+        const loggedInUserId = session.user.id;
+        setIsOwnProfile(memberId === loggedInUserId);
 
-      // ✅ Fetch member profile first (since everything depends on it)
-      const { data: mp, error: mpErr } = await supabase
-        .from("member_profiles")
-        .select("*")
-        .eq("user_id", memberId)
-        .maybeSingle();
+        // ✅ Fetch member profile first (since everything depends on it)
+        const { data: mp, error: mpErr } = await supabase
+          .from("member_profiles")
+          .select("*")
+          .eq("user_id", memberId)
+          .maybeSingle();
 
-      if (mpErr) throw new Error(`Profile fetch error: ${mpErr.message}`);
-      if (!mp) {
-        setError("Member profile not found.");
-        return;
-      }
-      setProfile(mp);
+        if (mpErr) throw new Error(`Profile fetch error: ${mpErr.message}`);
+        if (!mp) {
+          setError("Member profile not found.");
+          return;
+        }
+        setProfile(mp);
 
-      // ✅ Determine viewer role
-      let viewerRole: "member" | "trainer" | "nutritionist" | "admin" = "admin";
-      if (loggedInUserId === memberId) {
-        viewerRole = "member";
-      } else if (mp.assigned_trainer_id === loggedInUserId) {
-        viewerRole = "trainer";
-      } else if (mp.assigned_nutritionist_id === loggedInUserId) {
-        viewerRole = "nutritionist";
-      }
-      setUserRole(viewerRole);
+        // ✅ Determine viewer role
+        let viewerRole: "member" | "trainer" | "nutritionist" | "admin" =
+          "admin";
+        if (loggedInUserId === memberId) {
+          viewerRole = "member";
+        } else if (mp.assigned_trainer_id === loggedInUserId) {
+          viewerRole = "trainer";
+        } else if (mp.assigned_nutritionist_id === loggedInUserId) {
+          viewerRole = "nutritionist";
+        }
+        setUserRole(viewerRole);
 
-      // ✅ Prepare parallel fetches
-      const weightHistoryPromise =
-        ["member", "admin", "trainer", "nutritionist"].includes(viewerRole)
+        // ✅ Prepare parallel fetches
+        const weightHistoryPromise = [
+          "member",
+          "admin",
+          "trainer",
+          "nutritionist",
+        ].includes(viewerRole)
           ? supabase
               .from("weight_history")
               .select("*")
@@ -418,53 +523,63 @@ useEffect(() => {
               .order("recorded_at", { ascending: true })
           : Promise.resolve({ data: [], error: null });
 
-      const galleryPromise =
-        viewerRole === "member" || viewerRole === "admin"
-          ? supabase
-              .from("gallery")
-              .select("id, date, photo")
-              .eq("user_id", memberId)
-              .order("date", { ascending: false })
-          : Promise.resolve({ data: [], error: null });
+        const galleryPromise =
+          viewerRole === "member" || viewerRole === "admin"
+            ? supabase
+                .from("gallery")
+                .select("id, date, photo")
+                .eq("user_id", memberId)
+                .order("date", { ascending: false })
+            : Promise.resolve({ data: [], error: null });
 
-      const userPromise = supabase
-        .from("users")
-        .select("email")
-        .eq("id", memberId)
-        .single();
+        const userPromise = supabase
+          .from("users")
+          .select("email")
+          .eq("id", memberId)
+          .single();
 
-      const trainerPromise = mp?.assigned_trainer_id
-        ? fetch(`/api/member/trainer?trainer_id=${mp.assigned_trainer_id}`).then((res) => res.json())
-        : Promise.resolve(null);
+        const trainerPromise = mp?.assigned_trainer_id
+          ? fetch(
+              `/api/member/trainer?trainer_id=${mp.assigned_trainer_id}`
+            ).then((res) => res.json())
+          : Promise.resolve(null);
 
-      const nutritionistPromise = mp?.assigned_nutritionist_id
-        ? fetch(`/api/member/nutritionist?nutritionist_id=${mp.assigned_nutritionist_id}`).then((res) => res.json())
-        : Promise.resolve(null);
+        const nutritionistPromise = mp?.assigned_nutritionist_id
+          ? fetch(
+              `/api/member/nutritionist?nutritionist_id=${mp.assigned_nutritionist_id}`
+            ).then((res) => res.json())
+          : Promise.resolve(null);
 
-      // ✅ Wait for parallel results
-      const [weightRes, galleryRes, userRes, trainerRes, nutritionistRes] = await Promise.all([
-        weightHistoryPromise,
-        galleryPromise,
-        userPromise,
-        trainerPromise,
-        nutritionistPromise,
-      ]);
+        // ✅ Wait for parallel results
+        const [weightRes, galleryRes, userRes, trainerRes, nutritionistRes] =
+          await Promise.all([
+            weightHistoryPromise,
+            galleryPromise,
+            userPromise,
+            trainerPromise,
+            nutritionistPromise,
+          ]);
 
-      // ✅ Handle Weight History
-      if (weightRes.error) throw new Error(`Weight history fetch error: ${weightRes.error.message}`);
-      setWeightHistory(weightRes.data || []);
+        // ✅ Handle Weight History
+        if (weightRes.error)
+          throw new Error(
+            `Weight history fetch error: ${weightRes.error.message}`
+          );
+        setWeightHistory(weightRes.data || []);
 
-      // ✅ Handle Gallery
-      if (galleryRes.error) throw new Error(`Gallery fetch error: ${galleryRes.error.message}`);
-      setGalleryPhotos(galleryRes.data || []);
+        // ✅ Handle Gallery
+        if (galleryRes.error)
+          throw new Error(`Gallery fetch error: ${galleryRes.error.message}`);
+        setGalleryPhotos(galleryRes.data || []);
 
-      // ✅ User Email
-      const userEmail = userRes.data?.email;
-      if (!userEmail) throw new Error("User email not found.");
+        // ✅ User Email
+        const userEmail = userRes.data?.email;
+        if (!userEmail) throw new Error("User email not found.");
 
-      // ✅ Diet plan, diet history, and today's history (parallel)
-      const dietPlanPromise =
-        ["member", "admin", "nutritionist"].includes(viewerRole)
+        // ✅ Diet plan, diet history, and today's history (parallel)
+        const dietPlanPromise = ["member", "admin", "nutritionist"].includes(
+          viewerRole
+        )
           ? supabase
               .from("diet")
               .select("*")
@@ -472,232 +587,272 @@ useEffect(() => {
               .maybeSingle()
           : Promise.resolve({ data: null, error: null });
 
-      const [dpRes] = await Promise.all([dietPlanPromise]);
+        const [dpRes] = await Promise.all([dietPlanPromise]);
 
-      const dp = dpRes.data as DietPlan | null;
-      let dh: DietHistory[] = [];
-      let todayHistory: { intake: { [key: string]: boolean } } | null = null;
+        const dp = dpRes.data as DietPlan | null;
+        let dh: DietHistory[] = [];
+        let todayHistory: { intake: { [key: string]: boolean } } | null = null;
 
-      if (dp?.id) {
-        const [dhRes, todayRes] = await Promise.all([
-          supabase
-            .from("diet_history")
-            .select("*")
-            .eq("meal_plan_id", dp.id)
-            .order("date", { ascending: false }),
-          supabase
-            .from("diet_history")
-            .select("intake")
-            .eq("meal_plan_id", dp.id)
-            .eq("date", new Date().toISOString().split("T")[0])
-            .maybeSingle(),
-        ]);
+        if (dp?.id) {
+          const [dhRes, todayRes] = await Promise.all([
+            supabase
+              .from("diet_history")
+              .select("*")
+              .eq("meal_plan_id", dp.id)
+              .order("date", { ascending: false }),
+            supabase
+              .from("diet_history")
+              .select("intake")
+              .eq("meal_plan_id", dp.id)
+              .eq("date", new Date().toISOString().split("T")[0])
+              .maybeSingle(),
+          ]);
 
-        if (dhRes.error) throw new Error(`Diet history fetch error: ${dhRes.error.message}`);
-        if (todayRes.error && todayRes.error.code !== "PGRST116") {
-          throw new Error(`Today's history fetch error: ${todayRes.error.message}`);
-        }
-        dh = dhRes.data as DietHistory[];
-        todayHistory = todayRes.data;
-      }
-
-      setDietPlan(dp);
-      setDietHistory(dh);
-      setTodayMealStatus(todayHistory?.intake || {});
-
-      // ✅ Workout Plan + History (parallel inside block)
-      if (["member", "trainer", "admin"].includes(viewerRole)) {
-        const [wpRes, workoutHistory] = await Promise.all([
-          supabase
-            .from("workout_plans")
-            .select("id, assigned_to, created_at, created_by, plan")
-            .eq("assigned_to", userEmail)
-            .order("created_at", { ascending: false }),
-          fetch(`/api/workout/history?member_id=${memberId}`, {
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-          }).then(async (res) => {
-            if (!res.ok) {
-              const err = await res.json().catch(() => ({}));
-              throw new Error(`Workout history fetch error: ${err.error || "Unknown error"}`);
-            }
-            return res.json();
-          }),
-        ]);
-
-        if (wpRes.error) throw new Error(`Workout plan fetch error: ${wpRes.error.message}`);
-        const wp = wpRes.data || [];
-        setWorkouts(wp);
-        console.log("Fetched workouts:", wp);
-        if (wp.length > 0) setLatestPlan(wp[0]);
-
-        const history = workoutHistory.history || [];
-        setWorkoutHistory(history);
-        console.log("Fetched workout history:", history);
-      }
-
-      // ✅ Upload Eligibility
-      if (loggedInUserId === memberId) {
-        setCanUploadPhoto(true);
-      }
-
-
-      // ✅ Trainer & Nutritionist
-      if (trainerRes?.trainer_name) {
-        setTrainer({ full_name: trainerRes.trainer_name });
-      }
-      if (nutritionistRes?.nutritionist_name) {
-        setNutritionist({ full_name: nutritionistRes.nutritionist_name });
-      }
-
-      // ✅ Setup Modal
-      if (
-        loggedInUserId === memberId &&
-        (!mp?.height_cm ||
-          !mp?.weight_kg ||
-          !mp?.bmi ||
-          !mp?.gender ||
-          !mp?.goal ||
-          !mp?.activity_level)
-      ) {
-        setShowSetupModal(true);
-      }
-    } catch (err: any) {
-      console.error("Error loading dashboard:", {
-        message: err.message,
-        stack: err.stack,
-      });
-      setError(`Failed to load dashboard data: ${err.message}`);
-      toast.error(`Failed to load dashboard data: ${err.message}`);
-    } finally {
-      if (mounted) setLoading(false);
-    }
-  }
-
-  load();
-  return () => {
-    mounted = false;
-  };
-}, [memberId, router]);
-
-
-useEffect(() => {
-  if (latestPlan && workoutHistory) {
-    const today = new Date().toISOString().split('T')[0];
-    const latestPlanDate = new Date(latestPlan.created_at).toISOString().split('T')[0];
-
-    const todayHistory = workoutHistory.find((h: any) =>
-      new Date(h.recorded_at).toISOString().split('T')[0] === today &&
-      h.workout_plan_id === latestPlan.id
-    );
-
-    if (todayHistory && todayHistory.workout) {
-      setCurrentWorkout(todayHistory.workout);
-    } else if (latestPlanDate < today) {
-      // Auto-load same as latest if no new assignment today
-      const planArray = Array.isArray(latestPlan.plan)
-        ? latestPlan.plan
-        : latestPlan.plan?.exercises
-        ? latestPlan.plan.exercises
-        : [];
-      const initialized = planArray.map((ex: any) => ({
-        ...ex,
-        sets: ex.sets ? ex.sets.map((set: any) => ({ ...set, completed: false })) : [],
-      }));
-      setCurrentWorkout(initialized);
-      
-    } else {
-      // Normal load
-      const planArray = Array.isArray(latestPlan.plan)
-        ? latestPlan.plan
-        : latestPlan.plan?.exercises
-        ? latestPlan.plan.exercises
-        : [];
-      const initialized = planArray.map((ex: any) => ({
-        ...ex,
-        sets: ex.sets ? ex.sets.map((set: any) => ({ ...set, completed: false })) : [],
-      }));
-      setCurrentWorkout(initialized);
-    }
-  }
-}, [latestPlan, workoutHistory]);
-useEffect(() => {
-  if (userRole === 'member' || userRole === 'trainer' || userRole === 'admin') {  // Adjust based on your allowed roles
-    const rangeToFetch = selectedRange === 'custom' ? `last_${customNumber}_${customUnit}` : selectedRange;
-    fetchWorkoutHistory(rangeToFetch);
-  }
-}, [selectedRange, customNumber, customUnit, userRole, memberId]);
-
-useEffect(() => {
-  const checkIfAssignedTrainer = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      const { data, error } = await supabase
-        .from('member_profiles')
-        .select('assigned_trainer_id')
-        .eq('user_id', memberId)
-        .single();
-
-      if (!error && data && data.assigned_trainer_id === session.user.id) {
-        setIsAssignedTrainer(true);
-      }
-    }
-  };
-
-  if (!isOwnProfile) {  // Only check if not own profile
-    checkIfAssignedTrainer();
-  }
-}, [memberId, isOwnProfile]);
-
-useEffect(() => {
-  if (!dietPlan?.diet_plan) return;
-
-  const fetchNutrition = async () => {
-    try {
-      const allItems = Object.values(dietPlan.diet_plan).flatMap(items =>
-        items.map(item => ({
-          foodName: Object.keys(item)[0].trim(),
-          quantity: parseQuantity(Object.values(item)[0]),
-        }))
-      );
-      console.log('Fetching nutrition for:', allItems); // Debug input
-
-      const results = await Promise.all(
-        allItems.map(async item => {
-          try {
-            const res = await fetch(`/api/nutrition/${encodeURIComponent(item.foodName)}?quantity=${item.quantity}`);
-            const data = res.ok ? await res.json() : { food_name: item.foodName, calories: 0, protein: 0, carbs: 0, fats: 0 };
-            console.log(`Response for ${item.foodName}:`, data); // Debug API response
-            return data;
-          } catch (error) {
-            console.warn(`Error fetching ${item.foodName}:`, error);
-            return { food_name: item.foodName, calories: 0, protein: 0, carbs: 0, fats: 0 };
+          if (dhRes.error)
+            throw new Error(`Diet history fetch error: ${dhRes.error.message}`);
+          if (todayRes.error && todayRes.error.code !== "PGRST116") {
+            throw new Error(
+              `Today's history fetch error: ${todayRes.error.message}`
+            );
           }
-        })
-      );
-      setNutritionData(results);
+          dh = dhRes.data as DietHistory[];
+          todayHistory = todayRes.data;
+        }
 
-      const totalsRes = await fetch('/api/nutrition/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: allItems }),
-      });
-      const totals = totalsRes.ok ? await totalsRes.json() : { calories: 0, protein: 0, carbs: 0, fats: 0 };
-      console.log('Daily totals:', totals); // Debug totals
-      setDailyTotals(totals);
-      setFetchError(null);
-    } catch (error:any) {
-      console.warn('Nutrition fetch error:', error);
-      setFetchError(error.message);
-      setNutritionData([]);
-      setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0 });
+        setDietPlan(dp);
+        setDietHistory(dh);
+        setTodayMealStatus(todayHistory?.intake || {});
+
+        // ✅ Workout Plan + History (parallel inside block)
+        if (["member", "trainer", "admin"].includes(viewerRole)) {
+          const [wpRes, workoutHistory] = await Promise.all([
+            supabase
+              .from("workout_plans")
+              .select("id, assigned_to, created_at, created_by, plan")
+              .eq("assigned_to", userEmail)
+              .order("created_at", { ascending: false }),
+            fetch(`/api/workout/history?member_id=${memberId}`, {
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            }).then(async (res) => {
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(
+                  `Workout history fetch error: ${err.error || "Unknown error"}`
+                );
+              }
+              return res.json();
+            }),
+          ]);
+
+          if (wpRes.error)
+            throw new Error(`Workout plan fetch error: ${wpRes.error.message}`);
+          const wp = wpRes.data || [];
+          setWorkouts(wp);
+          console.log("Fetched workouts:", wp);
+          if (wp.length > 0) setLatestPlan(wp[0]);
+
+          const history = workoutHistory.history || [];
+          setWorkoutHistory(history);
+          console.log("Fetched workout history:", history);
+        }
+
+        // ✅ Upload Eligibility
+        if (loggedInUserId === memberId) {
+          setCanUploadPhoto(true);
+        }
+
+        // ✅ Trainer & Nutritionist
+        if (trainerRes?.trainer_name) {
+          setTrainer({ full_name: trainerRes.trainer_name });
+        }
+        if (nutritionistRes?.nutritionist_name) {
+          setNutritionist({ full_name: nutritionistRes.nutritionist_name });
+        }
+
+        // ✅ Setup Modal
+        if (
+          loggedInUserId === memberId &&
+          (!mp?.height_cm ||
+            !mp?.weight_kg ||
+            !mp?.bmi ||
+            !mp?.gender ||
+            !mp?.goal ||
+            !mp?.activity_level)
+        ) {
+          setShowSetupModal(true);
+        }
+      } catch (err: any) {
+        console.error("Error loading dashboard:", {
+          message: err.message,
+          stack: err.stack,
+        });
+        setError(`Failed to load dashboard data: ${err.message}`);
+        toast.error(`Failed to load dashboard data: ${err.message}`);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     }
-  };
 
-  fetchNutrition();
-}, [dietPlan]);
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, [memberId, router]);
 
+  useEffect(() => {
+    if (latestPlan && workoutHistory) {
+      const today = new Date().toISOString().split("T")[0];
+      const latestPlanDate = new Date(latestPlan.created_at)
+        .toISOString()
+        .split("T")[0];
+
+      const todayHistory = workoutHistory.find(
+        (h: any) =>
+          new Date(h.recorded_at).toISOString().split("T")[0] === today &&
+          h.workout_plan_id === latestPlan.id
+      );
+
+      if (todayHistory && todayHistory.workout) {
+        setCurrentWorkout(todayHistory.workout);
+      } else if (latestPlanDate < today) {
+        // Auto-load same as latest if no new assignment today
+        const planArray = Array.isArray(latestPlan.plan)
+          ? latestPlan.plan
+          : latestPlan.plan?.exercises
+          ? latestPlan.plan.exercises
+          : [];
+        const initialized = planArray.map((ex: any) => ({
+          ...ex,
+          sets: ex.sets
+            ? ex.sets.map((set: any) => ({ ...set, completed: false }))
+            : [],
+        }));
+        setCurrentWorkout(initialized);
+      } else {
+        // Normal load
+        const planArray = Array.isArray(latestPlan.plan)
+          ? latestPlan.plan
+          : latestPlan.plan?.exercises
+          ? latestPlan.plan.exercises
+          : [];
+        const initialized = planArray.map((ex: any) => ({
+          ...ex,
+          sets: ex.sets
+            ? ex.sets.map((set: any) => ({ ...set, completed: false }))
+            : [],
+        }));
+        setCurrentWorkout(initialized);
+      }
+    }
+  }, [latestPlan, workoutHistory]);
+  useEffect(() => {
+    if (
+      userRole === "member" ||
+      userRole === "trainer" ||
+      userRole === "admin"
+    ) {
+      // Adjust based on your allowed roles
+      const rangeToFetch =
+        selectedRange === "custom"
+          ? `last_${customNumber}_${customUnit}`
+          : selectedRange;
+      fetchWorkoutHistory(rangeToFetch);
+    }
+  }, [selectedRange, customNumber, customUnit, userRole, memberId]);
+
+  useEffect(() => {
+    const checkIfAssignedTrainer = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        const { data, error } = await supabase
+          .from("member_profiles")
+          .select("assigned_trainer_id")
+          .eq("user_id", memberId)
+          .single();
+
+        if (!error && data && data.assigned_trainer_id === session.user.id) {
+          setIsAssignedTrainer(true);
+        }
+      }
+    };
+
+    if (!isOwnProfile) {
+      // Only check if not own profile
+      checkIfAssignedTrainer();
+    }
+  }, [memberId, isOwnProfile]);
+
+  useEffect(() => {
+    if (!dietPlan?.diet_plan) return;
+
+    const fetchNutrition = async () => {
+      try {
+        const allItems = Object.values(dietPlan.diet_plan).flatMap((items) =>
+          items.map((item) => ({
+            foodName: Object.keys(item)[0].trim(),
+            quantity: parseQuantity(Object.values(item)[0]),
+          }))
+        );
+        console.log("Fetching nutrition for:", allItems); // Debug input
+
+        const results = await Promise.all(
+          allItems.map(async (item) => {
+            try {
+              const res = await fetch(
+                `/api/nutrition/${encodeURIComponent(item.foodName)}?quantity=${
+                  item.quantity
+                }`
+              );
+              const data = res.ok
+                ? await res.json()
+                : {
+                    food_name: item.foodName,
+                    calories: 0,
+                    protein: 0,
+                    carbs: 0,
+                    fats: 0,
+                  };
+              console.log(`Response for ${item.foodName}:`, data); // Debug API response
+              return data;
+            } catch (error) {
+              console.warn(`Error fetching ${item.foodName}:`, error);
+              return {
+                food_name: item.foodName,
+                calories: 0,
+                protein: 0,
+                carbs: 0,
+                fats: 0,
+              };
+            }
+          })
+        );
+        setNutritionData(results);
+
+        const totalsRes = await fetch("/api/nutrition/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: allItems }),
+        });
+        const totals = totalsRes.ok
+          ? await totalsRes.json()
+          : { calories: 0, protein: 0, carbs: 0, fats: 0 };
+        console.log("Daily totals:", totals); // Debug totals
+        setDailyTotals(totals);
+        setFetchError(null);
+      } catch (error: any) {
+        console.warn("Nutrition fetch error:", error);
+        setFetchError(error.message);
+        setNutritionData([]);
+        setDailyTotals({ calories: 0, protein: 0, carbs: 0, fats: 0 });
+      }
+    };
+
+    fetchNutrition();
+  }, [dietPlan]);
 
   // Modified weight extraction to use member_profiles when weight_history is empty
   const lastWeight = useMemo(() => {
@@ -705,45 +860,67 @@ useEffect(() => {
       return weightHistory[weightHistory.length - 1];
     }
     if (profile?.weight_kg) {
-      return { weight_kg: profile.weight_kg, recorded_at: profile.plan_start || new Date().toISOString() };
+      return {
+        weight_kg: profile.weight_kg,
+        recorded_at: profile.plan_start || new Date().toISOString(),
+      };
     }
     return null;
   }, [weightHistory, profile]);
 
-  const weightUpdatedAgo = lastWeight ? formatDistanceToNowStrict(new Date(lastWeight.recorded_at)) : null;
-  const isStale = !lastWeight || (Date.now() - new Date(lastWeight.recorded_at).getTime()) > 24 * 3600 * 1000;
-
-  const dietChartData = useMemo(() => {
-    return dietHistory.map(h => ({
-      date: new Date(h.date).toLocaleDateString(),
-      completedMeals: Object.values(h.intake).filter(Boolean).length,
-    }));
-  }, [dietHistory]);
+  const weightUpdatedAgo = lastWeight
+    ? formatDistanceToNowStrict(new Date(lastWeight.recorded_at))
+    : null;
+  const handleFileUpload = async (file: File | File[]) => {
+    const selectedFile = Array.isArray(file) ? file[0] : file;
+    if (selectedFile) {
+      await handlePhotoUpload(selectedFile);
+    }
+  };
 
   async function refreshData() {
     setLoading(true);
     setError(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const { data: mp, error: mpErr } = await supabase.from("member_profiles").select("*").eq("user_id", memberId).maybeSingle();
+      const { data: mp, error: mpErr } = await supabase
+        .from("member_profiles")
+        .select("*")
+        .eq("user_id", memberId)
+        .maybeSingle();
       if (mpErr) throw new Error(`Profile fetch error: ${mpErr.message}`);
 
       let wh: WeightHistory[] = [];
-      if (userRole === 'member' || userRole === 'admin' || userRole === 'trainer' || userRole === 'nutritionist') {
-        const { data: whData, error: whErr } = await supabase.from("weight_history").select("*").eq("member_id", memberId).order("recorded_at", { ascending: true });
+      if (
+        userRole === "member" ||
+        userRole === "admin" ||
+        userRole === "trainer" ||
+        userRole === "nutritionist"
+      ) {
+        const { data: whData, error: whErr } = await supabase
+          .from("weight_history")
+          .select("*")
+          .eq("member_id", memberId)
+          .order("recorded_at", { ascending: true });
         if (whErr) {
-          console.error('Weight history fetch error:', whErr);
+          console.error("Weight history fetch error:", whErr);
           throw new Error(`Weight history fetch error: ${whErr.message}`);
         }
-        console.log('Weight history data:', whData);
+        console.log("Weight history data:", whData);
         wh = whData as WeightHistory[];
       }
 
       let gp: GalleryPhoto[] = [];
-      if (userRole === 'member' || userRole === 'admin') {
-        const { data: gpData, error: gpErr } = await supabase.from("gallery").select("id, date, photo").eq("user_id", memberId).order("date", { ascending: false });
+      if (userRole === "member" || userRole === "admin") {
+        const { data: gpData, error: gpErr } = await supabase
+          .from("gallery")
+          .select("id, date, photo")
+          .eq("user_id", memberId)
+          .order("date", { ascending: false });
         if (gpErr) throw new Error(`Gallery fetch error: ${gpErr.message}`);
         gp = gpData as GalleryPhoto[];
       }
@@ -751,7 +928,11 @@ useEffect(() => {
       let dp: DietPlan | null = null;
       let dh: DietHistory[] = [];
       let todayHistory: { intake: { [key: string]: boolean } } | null = null;
-      if (userRole === 'member' || userRole === 'admin' || userRole === 'nutritionist') {
+      if (
+        userRole === "member" ||
+        userRole === "admin" ||
+        userRole === "nutritionist"
+      ) {
         const { data: userData, error: userErr } = await supabase
           .from("users")
           .select("email")
@@ -764,7 +945,8 @@ useEffect(() => {
           .select("*")
           .eq("user_email", userData.email)
           .maybeSingle();
-        if (dpErr && dpErr.code !== "PGRST116") throw new Error(`Diet plan fetch error: ${dpErr.message}`);
+        if (dpErr && dpErr.code !== "PGRST116")
+          throw new Error(`Diet plan fetch error: ${dpErr.message}`);
         dp = dpData as DietPlan;
 
         if (dp?.id) {
@@ -773,7 +955,8 @@ useEffect(() => {
             .select("*")
             .eq("meal_plan_id", dp.id)
             .order("date", { ascending: false });
-          if (dhErr) throw new Error(`Diet history fetch error: ${dhErr.message}`);
+          if (dhErr)
+            throw new Error(`Diet history fetch error: ${dhErr.message}`);
           dh = dhData as DietHistory[];
 
           const today = new Date().toISOString().split("T")[0];
@@ -783,7 +966,8 @@ useEffect(() => {
             .eq("meal_plan_id", dp.id)
             .eq("date", today)
             .maybeSingle();
-          if (todayErr && todayErr.code !== "PGRST116") throw new Error(`Today's history fetch error: ${todayErr.message}`);
+          if (todayErr && todayErr.code !== "PGRST116")
+            throw new Error(`Today's history fetch error: ${todayErr.message}`);
           todayHistory = todayHistoryData;
         }
       }
@@ -794,36 +978,43 @@ useEffect(() => {
       setDietPlan(dp ?? null);
       setDietHistory(dh ?? []);
       setTodayMealStatus(todayHistory?.intake || {});
-            // Fetch workouts for member
-            // Fetch workouts for member if viewer is member, trainer, or admin
-      if (userRole === 'member' || userRole === 'trainer' || userRole === 'admin') {
+      // Fetch workouts for member
+      // Fetch workouts for member if viewer is member, trainer, or admin
+      if (
+        userRole === "member" ||
+        userRole === "trainer" ||
+        userRole === "admin"
+      ) {
         const { data: userData, error: userErr } = await supabase
-          .from('users')
-          .select('email')
-          .eq('id', memberId)
+          .from("users")
+          .select("email")
+          .eq("id", memberId)
           .single();
         if (userErr) {
-          console.log('User Fetch Error:', userErr);
+          console.log("User Fetch Error:", userErr);
           throw new Error(`User fetch error: ${userErr.message}`);
         }
 
         const { data: wpData, error: wpErr } = await supabase
-          .from('workout_plans')
-          .select('*')
-          .eq('assigned_to', userData.email)
-          .order('created_at', { ascending: false });
+          .from("workout_plans")
+          .select("*")
+          .eq("assigned_to", userData.email)
+          .order("created_at", { ascending: false });
         if (wpErr) {
-          console.log('Workouts Fetch Error:', wpErr);
+          console.log("Workouts Fetch Error:", wpErr);
           throw new Error(`Workouts fetch error: ${wpErr.message}`);
         }
         setWorkouts(wpData || []);
-        console.log('Fetched workouts:', wpData);
+        console.log("Fetched workouts:", wpData);
       }
-      
 
       if (mp?.assigned_trainer_id) {
         try {
-          const { data: tr, error: trErr } = await supabase.from("trainers_profile").select("full_name").eq("user_id", mp.assigned_trainer_id).maybeSingle();
+          const { data: tr, error: trErr } = await supabase
+            .from("trainers_profile")
+            .select("full_name")
+            .eq("user_id", mp.assigned_trainer_id)
+            .maybeSingle();
           if (trErr) throw new Error(`Trainer fetch error: ${trErr.message}`);
           setTrainer(tr ? { full_name: tr.full_name } : null);
         } catch {
@@ -832,8 +1023,13 @@ useEffect(() => {
       }
       if (mp?.assigned_nutritionist_id) {
         try {
-          const { data: nu, error: nuErr } = await supabase.from("nutritionists_profile").select("full_name").eq("user_id", mp.assigned_nutritionist_id).maybeSingle();
-          if (nuErr) throw new Error(`Nutritionist fetch error: ${nuErr.message}`);
+          const { data: nu, error: nuErr } = await supabase
+            .from("nutritionists_profile")
+            .select("full_name")
+            .eq("user_id", mp.assigned_nutritionist_id)
+            .maybeSingle();
+          if (nuErr)
+            throw new Error(`Nutritionist fetch error: ${nuErr.message}`);
           setNutritionist(nu ? { full_name: nu.full_name } : null);
         } catch {
           setNutritionist(null);
@@ -842,7 +1038,9 @@ useEffect(() => {
 
       if (session.user.id === memberId) {
         const latestPhoto = gp?.[0];
-        const canUpload = !latestPhoto || isAfter(new Date(), addDays(new Date(latestPhoto.date), 7));
+        const canUpload =
+          !latestPhoto ||
+          isAfter(new Date(), addDays(new Date(latestPhoto.date), 7));
         setCanUploadPhoto(canUpload);
       }
     } catch (err: any) {
@@ -878,7 +1076,9 @@ useEffect(() => {
     setError(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.access_token) {
         setError("Authentication required");
         toast.error("Authentication required");
@@ -941,7 +1141,9 @@ useEffect(() => {
     setError(null);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.access_token) {
         setError("Authentication required");
         toast.error("Authentication required");
@@ -977,119 +1179,132 @@ useEffect(() => {
     }
   }
   async function handleHeightUpdate() {
-  if (!newHeight || isNaN(Number(newHeight)) || Number(newHeight) < 100 || Number(newHeight) > 250) {
-    toast.error("Please enter a valid height (100–250 cm)");
-    return;
-  }
-
-  setLoading(true);
-  setError(null);
-
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      toast.error("Authentication required");
+    if (
+      !newHeight ||
+      isNaN(Number(newHeight)) ||
+      Number(newHeight) < 100 ||
+      Number(newHeight) > 250
+    ) {
+      toast.error("Please enter a valid height (100–250 cm)");
       return;
     }
 
-    const response = await fetch("/api/member/update_profile", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ height_cm: Number(newHeight) }),
-    });
+    setLoading(true);
+    setError(null);
 
-    if (response.ok) {
-      setShowHeightUpdateModal(false);
-      setNewHeight("");
-      await refreshData();
-      toast.success("Height updated successfully!");
-    } else {
-      const result = await response.json();
-      toast.error(result.error || "Failed to update height");
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast.error("Authentication required");
+        return;
+      }
+
+      const response = await fetch("/api/member/update_profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ height_cm: Number(newHeight) }),
+      });
+
+      if (response.ok) {
+        setShowHeightUpdateModal(false);
+        setNewHeight("");
+        await refreshData();
+        toast.success("Height updated successfully!");
+      } else {
+        const result = await response.json();
+        toast.error(result.error || "Failed to update height");
+      }
+    } catch (error: any) {
+      toast.error("An unexpected error occurred.");
+      console.error("Height update error:", error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error: any) {
-    toast.error("An unexpected error occurred.");
-    console.error("Height update error:", error);
-  } finally {
-    setLoading(false);
   }
-}
 
   async function handlePhotoUpload(file: File) {
-  if (!file || !isOwnProfile) {
-    setError("Invalid file or unauthorized action");
-    toast.error("Invalid file or unauthorized action");
-    return;
-  }
-
-  const validTypes = ["image/jpeg", "image/png"];
-  if (!validTypes.includes(file.type)) {
-    setError("Only JPEG or PNG files are allowed");
-    toast.error("Only JPEG or PNG files are allowed");
-    return;
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    setError("File size must be less than 5MB");
-    toast.error("File size must be less than 5MB");
-    return;
-  }
-
-  setUploading(true);
-  setError(null);
-
-  try {
-    // ✅ Check authentication
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !session) {
-      setError("Authentication failed. Please log in again.");
-      toast.error("Authentication failed. Please log in again.");
-      router.push("/login");
+    if (!file || !isOwnProfile) {
+      setError("Invalid file or unauthorized action");
+      toast.error("Invalid file or unauthorized action");
       return;
     }
 
-    if (memberId !== session.user.id) {
-      throw new Error("Unauthorized: memberId does not match authenticated user");
+    const validTypes = ["image/jpeg", "image/png"];
+    if (!validTypes.includes(file.type)) {
+      setError("Only JPEG or PNG files are allowed");
+      toast.error("Only JPEG or PNG files are allowed");
+      return;
     }
-    // ✅ Upload file to Supabase Storage
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${Date.now()}.${fileExt}`;
-    const filePath = `gallery/${session.user.id}/${fileName}`;
-    const { error: uploadError } = await supabase.storage
-      .from("gallery")
-      .upload(filePath, file, { contentType: file.type });
 
-    if (uploadError) {
-      console.error("Storage upload error details:", uploadError);
-      throw new Error(`Storage upload failed: ${uploadError.message}`);
+    if (file.size > 5 * 1024 * 1024) {
+      setError("File size must be less than 5MB");
+      toast.error("File size must be less than 5MB");
+      return;
     }
-    const { data: { publicUrl } } = supabase.storage.from("gallery").getPublicUrl(filePath);
-    if (!publicUrl) throw new Error("Failed to get public URL for uploaded file");
-    // ✅ Insert uploaded photo record into DB
-    const { error: insertError } = await supabase
-      .from("gallery")
-      .insert({
+
+    setUploading(true);
+    setError(null);
+
+    try {
+      // ✅ Check authentication
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        setError("Authentication failed. Please log in again.");
+        toast.error("Authentication failed. Please log in again.");
+        router.push("/login");
+        return;
+      }
+
+      if (memberId !== session.user.id) {
+        throw new Error(
+          "Unauthorized: memberId does not match authenticated user"
+        );
+      }
+      // ✅ Upload file to Supabase Storage
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `gallery/${session.user.id}/${fileName}`;
+      const { error: uploadError } = await supabase.storage
+        .from("gallery")
+        .upload(filePath, file, { contentType: file.type });
+
+      if (uploadError) {
+        console.error("Storage upload error details:", uploadError);
+        throw new Error(`Storage upload failed: ${uploadError.message}`);
+      }
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("gallery").getPublicUrl(filePath);
+      if (!publicUrl)
+        throw new Error("Failed to get public URL for uploaded file");
+      // ✅ Insert uploaded photo record into DB
+      const { error: insertError } = await supabase.from("gallery").insert({
         photo: publicUrl,
         user_email: session.user.email,
         user_id: session.user.id,
       });
 
-    if (insertError) throw new Error(`Database insert failed: ${insertError.message}`);
+      if (insertError)
+        throw new Error(`Database insert failed: ${insertError.message}`);
 
-    await refreshData();
-    toast.success("Photo uploaded successfully!");
-  } catch (error: any) {
-    console.error("Photo upload error:", error.message);
-    setError(`Failed to upload photo: ${error.message}`);
-    toast.error(`Failed to upload photo: ${error.message}`);
-  } finally {
-    setUploading(false);
+      await refreshData();
+      toast.success("Photo uploaded successfully!");
+    } catch (error: any) {
+      console.error("Photo upload error:", error.message);
+      setError(`Failed to upload photo: ${error.message}`);
+      toast.error(`Failed to upload photo: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
   }
-}
-
 
   async function handleMealIntake(meal: string, taken: boolean) {
     if (!dietPlan || !isOwnProfile) {
@@ -1102,7 +1317,10 @@ useEffect(() => {
     setError(null);
 
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
       if (sessionError || !session) {
         setError("Authentication failed. Please log in again.");
         toast.error("Authentication failed. Please log in again.");
@@ -1119,10 +1337,14 @@ useEffect(() => {
         .single();
 
       if (fetchError && fetchError.code !== "PGRST116") {
-        throw new Error(`Failed to check existing history: ${fetchError.message}`);
+        throw new Error(
+          `Failed to check existing history: ${fetchError.message}`
+        );
       }
 
-      const intake = existingHistory ? { ...existingHistory.intake, [meal]: taken } : { [meal]: taken };
+      const intake = existingHistory
+        ? { ...existingHistory.intake, [meal]: taken }
+        : { [meal]: taken };
 
       let response;
       if (existingHistory) {
@@ -1131,20 +1353,20 @@ useEffect(() => {
           .update({ intake, updated_at: new Date().toISOString() })
           .eq("id", existingHistory.id);
       } else {
-        response = await supabase
-          .from("diet_history")
-          .insert({
-            meal_plan_id: dietPlan.id,
-            date: today,
-            intake,
-          });
+        response = await supabase.from("diet_history").insert({
+          meal_plan_id: dietPlan.id,
+          date: today,
+          intake,
+        });
       }
 
       if (response.error) {
-        throw new Error(`Failed to update diet history: ${response.error.message}`);
+        throw new Error(
+          `Failed to update diet history: ${response.error.message}`
+        );
       }
 
-      setTodayMealStatus(prev => ({ ...prev, [meal]: taken }));
+      setTodayMealStatus((prev) => ({ ...prev, [meal]: taken }));
       await refreshData();
       toast.success(`Meal ${meal} marked as ${taken ? "taken" : "not taken"}`);
     } catch (error: any) {
@@ -1157,7 +1379,7 @@ useEffect(() => {
   }
 
   const addMeal = () => {
-    setNewDietPlan(prev => [
+    setNewDietPlan((prev) => [
       ...prev,
       { name: `Meal ${prev.length + 1}`, items: [{ name: "", quantity: "" }] },
     ]);
@@ -1165,18 +1387,18 @@ useEffect(() => {
 
   const removeMeal = (index: number) => {
     if (newDietPlan.length > 1) {
-      setNewDietPlan(prev => prev.filter((_, i) => i !== index));
+      setNewDietPlan((prev) => prev.filter((_, i) => i !== index));
     }
   };
 
   const updateMealName = (index: number, name: string) => {
-    setNewDietPlan(prev =>
+    setNewDietPlan((prev) =>
       prev.map((meal, i) => (i === index ? { ...meal, name } : meal))
     );
   };
 
   const addMealItem = (mealIndex: number) => {
-    setNewDietPlan(prev =>
+    setNewDietPlan((prev) =>
       prev.map((meal, i) =>
         i === mealIndex
           ? { ...meal, items: [...meal.items, { name: "", quantity: "" }] }
@@ -1185,8 +1407,13 @@ useEffect(() => {
     );
   };
 
-  const updateMealItem = (mealIndex: number, itemIndex: number, field: "name" | "quantity", value: string) => {
-    setNewDietPlan(prev =>
+  const updateMealItem = (
+    mealIndex: number,
+    itemIndex: number,
+    field: "name" | "quantity",
+    value: string
+  ) => {
+    setNewDietPlan((prev) =>
       prev.map((meal, i) =>
         i === mealIndex
           ? {
@@ -1201,7 +1428,7 @@ useEffect(() => {
   };
 
   const removeMealItem = (mealIndex: number, itemIndex: number) => {
-    setNewDietPlan(prev =>
+    setNewDietPlan((prev) =>
       prev.map((meal, i) =>
         i === mealIndex
           ? { ...meal, items: meal.items.filter((_, j) => j !== itemIndex) }
@@ -1212,14 +1439,18 @@ useEffect(() => {
 
   async function handleUpdateDietPlan() {
     const isValid = newDietPlan.every(
-      meal =>
+      (meal) =>
         meal.name.trim() &&
-        meal.items.some(item => item.name.trim() && item.quantity.trim())
+        meal.items.some((item) => item.name.trim() && item.quantity.trim())
     );
 
     if (!isValid) {
-      setError("Please enter a meal name and at least one valid item for each meal");
-      toast.error("Please enter a meal name and at least one valid item for each meal");
+      setError(
+        "Please enter a meal name and at least one valid item for each meal"
+      );
+      toast.error(
+        "Please enter a meal name and at least one valid item for each meal"
+      );
       return;
     }
 
@@ -1227,15 +1458,18 @@ useEffect(() => {
     setError(null);
 
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
       if (sessionError || !session?.access_token) {
         throw new Error("Authentication required");
       }
 
       const dietPlanData = newDietPlan.reduce((acc, meal) => {
         acc[meal.name] = meal.items
-          .filter(item => item.name.trim() && item.quantity.trim())
-          .map(item => ({ [item.name.trim()]: item.quantity.trim() }));
+          .filter((item) => item.name.trim() && item.quantity.trim())
+          .map((item) => ({ [item.name.trim()]: item.quantity.trim() }));
         return acc;
       }, {} as { [key: string]: { [key: string]: string }[] });
 
@@ -1265,16 +1499,19 @@ useEffect(() => {
       if (existingDiet) {
         response = await supabase
           .from("diet")
-          .update({ diet_plan: dietPlanData, updated_at: new Date().toISOString() })
+          .update({
+            diet_plan: dietPlanData,
+            updated_at: new Date().toISOString(),
+          })
           .eq("id", existingDiet.id);
       } else {
-        response = await supabase
-          .from("diet")
-          .insert(payload);
+        response = await supabase.from("diet").insert(payload);
       }
 
       if (response.error) {
-        throw new Error(`Failed to update diet plan: ${response.error.message}`);
+        throw new Error(
+          `Failed to update diet plan: ${response.error.message}`
+        );
       }
 
       setShowDietUpdateModal(false);
@@ -1291,7 +1528,7 @@ useEffect(() => {
   }
 
   const missedMeals = useMemo(() => {
-    return dietHistory.flatMap(history =>
+    return dietHistory.flatMap((history) =>
       Object.entries(history.intake)
         .filter(([_, taken]) => !taken)
         .map(([meal]) => ({
@@ -1302,10 +1539,21 @@ useEffect(() => {
     );
   }, [dietHistory, dietPlan]);
 
-  const showWeightSection = userRole === 'member' || userRole === 'admin' || userRole === 'trainer' || userRole === 'nutritionist';
-  const showDietSection = userRole === 'member' || userRole === 'admin' || userRole === 'nutritionist';
-  const showPlanSection = userRole === 'member' || userRole === 'admin' || userRole === 'trainer' || userRole === 'nutritionist';
-  const showPhotoGallery = userRole === 'member' || userRole === 'admin';
+  const showWeightSection =
+    userRole === "member" ||
+    userRole === "admin" ||
+    userRole === "trainer" ||
+    userRole === "nutritionist";
+  const showDietSection =
+    userRole === "member" ||
+    userRole === "admin" ||
+    userRole === "nutritionist";
+  const showPlanSection =
+    userRole === "member" ||
+    userRole === "admin" ||
+    userRole === "trainer" ||
+    userRole === "nutritionist";
+  const showPhotoGallery = userRole === "member" || userRole === "admin";
 
   // Get dynamic steps for the setup modal
   const steps = getDynamicSteps(profile);
@@ -1319,139 +1567,167 @@ useEffect(() => {
       </div>
     );
   }
-const fetchWorkoutHistory = async (range: string) => {
-  try {
-    console.log('fetchWorkoutHistory - Starting:', { memberId, range });
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    console.log('fetchWorkoutHistory - Session:', {
-      user: session?.user?.email,
-      userId: session?.user?.id,
-      token: session?.access_token?.slice(0, 10) + '...'
+  const fetchWorkoutHistory = async (range: string) => {
+    try {
+      console.log("fetchWorkoutHistory - Starting:", { memberId, range });
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+      console.log("fetchWorkoutHistory - Session:", {
+        user: session?.user?.email,
+        userId: session?.user?.id,
+        token: session?.access_token?.slice(0, 10) + "...",
+      });
+
+      if (sessionError || !session) {
+        console.warn("fetchWorkoutHistory - Warning: Session expired");
+        toast.error("Session expired. Please log in again.");
+        setWorkoutHistory([]);
+        return;
+      }
+
+      const response = await fetch(
+        `/api/workout/history?member_id=${memberId}&range=${range}`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      console.log("fetchWorkoutHistory - Response:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("fetchWorkoutHistory - Error:", {
+          status: response.status,
+          error: errorData.error || "Unknown error",
+          details: errorData.details || "No details",
+        });
+        toast.error(
+          `Failed to load workout history: ${
+            errorData.error || "Unknown error"
+          }`
+        );
+        setWorkoutHistory([]);
+        return;
+      }
+
+      const { history } = await response.json();
+      console.log("fetchWorkoutHistory - Fetched:", history);
+      if (!history || history.length === 0) {
+        console.warn("fetchWorkoutHistory - Warning: Empty history returned", {
+          memberId,
+          range,
+        });
+      }
+      setWorkoutHistory(history || []);
+    } catch (error: any) {
+      console.error("fetchWorkoutHistory - Failed:", {
+        message: error.message,
+        stack: error.stack,
+      });
+      toast.error(`Failed to load workout history: ${error.message}`);
+      setWorkoutHistory([]);
+    }
+  };
+  const handleToggleCompletion = async (
+    exerciseIndex: number,
+    setIndex: number
+  ) => {
+    const updatedWorkout = currentWorkout.map((ex: any, exIdx: number) => {
+      if (exIdx === exerciseIndex) {
+        return {
+          ...ex,
+          sets: ex.sets.map((set: any, setIdx: number) => {
+            if (setIdx === setIndex) {
+              return { ...set, completed: !set.completed };
+            }
+            return set;
+          }),
+        };
+      }
+      return ex;
     });
 
-    if (sessionError || !session) {
-      console.warn('fetchWorkoutHistory - Warning: Session expired');
-      toast.error('Session expired. Please log in again.');
-      setWorkoutHistory([]);
-      return;
-    }
+    setCurrentWorkout(updatedWorkout);
 
-    const response = await fetch(
-      `/api/workout/history?member_id=${memberId}&range=${range}`,
-      {
+    // Calculate completion percentage
+    const completedSets = updatedWorkout.reduce(
+      (acc: number, ex: any) =>
+        acc + ex.sets.filter((s: any) => s.completed).length,
+      0
+    );
+    const totalSets = updatedWorkout.reduce(
+      (acc: number, ex: any) => acc + ex.sets.length,
+      0
+    );
+    const percentage =
+      totalSets > 0 ? Math.round((completedSets / totalSets) * 100) : 0;
+
+    // Save to API
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Session expired. Please log in again.");
+        return;
+      }
+
+      const response = await fetch("/api/workout/log", {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-      }
-    );
-
-    console.log('fetchWorkoutHistory - Response:', {
-      status: response.status,
-      statusText: response.statusText,
-      ok: response.ok,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('fetchWorkoutHistory - Error:', {
-        status: response.status,
-        error: errorData.error || 'Unknown error',
-        details: errorData.details || 'No details',
-      });
-      toast.error(`Failed to load workout history: ${errorData.error || 'Unknown error'}`);
-      setWorkoutHistory([]);
-      return;
-    }
-
-    const { history } = await response.json();
-    console.log('fetchWorkoutHistory - Fetched:', history);
-    if (!history || history.length === 0) {
-      console.warn('fetchWorkoutHistory - Warning: Empty history returned', { memberId, range });
-    }
-    setWorkoutHistory(history || []);
-  } catch (error: any) {
-    console.error('fetchWorkoutHistory - Failed:', {
-      message: error.message,
-      stack: error.stack,
-    });
-    toast.error(`Failed to load workout history: ${error.message}`);
-    setWorkoutHistory([]);
-  }
-};
-const handleToggleCompletion = async (exerciseIndex: number, setIndex: number) => {
-  const updatedWorkout = currentWorkout.map((ex: any, exIdx: number) => {
-    if (exIdx === exerciseIndex) {
-      return {
-        ...ex,
-        sets: ex.sets.map((set: any, setIdx: number) => {
-          if (setIdx === setIndex) {
-            return { ...set, completed: !set.completed };
-          }
-          return set;
+        body: JSON.stringify({
+          memberId,
+          workoutPlanId: latestPlan.id,
+          workout: updatedWorkout,
+          completionPercentage: percentage,
         }),
-      };
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        toast.error(
+          `Failed to save progress: ${errorData.error || "Unknown error"}`
+        );
+        return;
+      }
+
+      // Refresh history to reflect updated record
+      await fetchWorkoutHistory("last_1_days");
+    } catch (error: any) {
+      toast.error(`Failed to save progress: ${error.message}`);
     }
-    return ex;
-  });
-
-  setCurrentWorkout(updatedWorkout);
-
-  // Calculate completion percentage
-  const completedSets = updatedWorkout.reduce((acc: number, ex: any) => acc + ex.sets.filter((s: any) => s.completed).length, 0);
-  const totalSets = updatedWorkout.reduce((acc: number, ex: any) => acc + ex.sets.length, 0);
-  const percentage = totalSets > 0 ? Math.round((completedSets / totalSets) * 100) : 0;
-
-  // Save to API
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      toast.error('Session expired. Please log in again.');
-      return;
-    }
-
-    const response = await fetch('/api/workout/log', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        memberId,
-        workoutPlanId: latestPlan.id,
-        workout: updatedWorkout,
-        completionPercentage: percentage,
-      }),
-    });
-
-if (!response.ok) {
-      const errorData = await response.json();
-      toast.error(`Failed to save progress: ${errorData.error || 'Unknown error'}`);
-      return;
-    }
-
-    // Refresh history to reflect updated record
-    await fetchWorkoutHistory('last_1_days');
-  } catch (error: any) {
-    toast.error(`Failed to save progress: ${error.message}`);
-  }
-};
+  };
 
   if (loading) {
-  return (
-    <div className="space-y-6 p-6 min-h-screen bg-white dark:from-gray-900 dark:to-gray-800">
-      <Skeleton height={40} width="30%" /> {/* Header */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => <Skeleton key={i} height={120} />)} {/* Quick stats cards */}
+    return (
+      <div className="space-y-6 p-6 min-h-screen bg-white dark:from-gray-900 dark:to-gray-800">
+        <Skeleton height={40} width="30%" /> {/* Header */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} height={120} />
+          ))}{" "}
+          {/* Quick stats cards */}
+        </div>
+        <Skeleton height={200} /> {/* Assigned Trainer card */}
+        <Skeleton height={300} /> {/* Weight Tracking chart */}
+        <Skeleton height={400} /> {/* Meal Plan section */}
+        <Skeleton height={300} /> {/* Photo Gallery */}
+        <Skeleton height={400} /> {/* Workout Tracker */}
+        <Skeleton height={400} /> {/* Progress History */}
       </div>
-      <Skeleton height={200} /> {/* Assigned Trainer card */}
-      <Skeleton height={300} /> {/* Weight Tracking chart */}
-      <Skeleton height={400} /> {/* Meal Plan section */}
-      <Skeleton height={300} /> {/* Photo Gallery */}
-      <Skeleton height={400} /> {/* Workout Tracker */}
-      <Skeleton height={400} /> {/* Progress History */}
-    </div>
-  );
-}
+    );
+  }
 
   return (
     <motion.div
@@ -1466,21 +1742,30 @@ if (!response.ok) {
           variant="outline"
           size="sm"
           onClick={() => {
-            if (userRole === 'member') {
+            if (userRole === "member") {
               router.push(`/member/${memberId}`);
-            } else if (userRole === 'trainer') {
-              router.push('/trainer/dashboard');
-            } else if (userRole === 'nutritionist') {
-              router.push('/nutritionist/dashboard');
+            } else if (userRole === "trainer") {
+              router.push("/trainer/dashboard");
+            } else if (userRole === "nutritionist") {
+              router.push("/nutritionist/dashboard");
             } else {
-              router.push('/admin/dashboard');
+              router.push("/admin/dashboard");
             }
           }}
           className="flex items-center gap-2"
         >
-          &#8592; Back to {userRole === 'member' ? 'Member' : userRole === 'trainer' ? 'Trainer' : userRole === 'nutritionist' ? 'Nutritionist' : 'Admin'} Dashboard
+          &#8592; Back to{" "}
+          {userRole === "member"
+            ? "Member"
+            : userRole === "trainer"
+            ? "Trainer"
+            : userRole === "nutritionist"
+            ? "Nutritionist"
+            : "Admin"}{" "}
+          Dashboard
         </Button>
         <AppointmentsList />
+
         {/* {isOwnProfile && (
           <Button
             variant="default"
@@ -1500,27 +1785,24 @@ if (!response.ok) {
           </Button>
         )} */}
       </div>
-      <Button
-      onClick={() => {
-            if (userRole === 'member') {
-              router.push(`/member/book`);
-            }
-          }}
-        className="inline-block px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-      >
-        Book Appointment 
-      </Button>
 
-      <Dialog open={showSetupModal} onOpenChange={(open) => {
-        if (!open) {
-          setShowSetupModal(false);
-          setCurrentStep(0);
-          refreshData();
-        }
-      }}>
+      <ContactHosts />
+
+      <Dialog
+        open={showSetupModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowSetupModal(false);
+            setCurrentStep(0);
+            refreshData();
+          }
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{steps[currentStep]?.title || "Complete Your Profile"}</DialogTitle>
+            <DialogTitle>
+              {steps[currentStep]?.title || "Complete Your Profile"}
+            </DialogTitle>
           </DialogHeader>
           <AnimatePresence mode="wait">
             {steps.length > 0 && (
@@ -1549,7 +1831,10 @@ if (!response.ok) {
             {steps.length > 0 && (
               <>
                 {currentStep > 0 && (
-                  <Button variant="outline" onClick={() => setCurrentStep(currentStep - 1)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentStep(currentStep - 1)}
+                  >
                     Back
                   </Button>
                 )}
@@ -1567,10 +1852,14 @@ if (!response.ok) {
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {currentStep < steps.length - 1 ? "Loading..." : "Saving..."}
+                      {currentStep < steps.length - 1
+                        ? "Loading..."
+                        : "Saving..."}
                     </>
+                  ) : currentStep < steps.length - 1 ? (
+                    "Next"
                   ) : (
-                    currentStep < steps.length - 1 ? "Next" : "Submit"
+                    "Submit"
                   )}
                 </Button>
               </>
@@ -1579,7 +1868,10 @@ if (!response.ok) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showWeightUpdateModal} onOpenChange={setShowWeightUpdateModal}>
+      <Dialog
+        open={showWeightUpdateModal}
+        onOpenChange={setShowWeightUpdateModal}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Track Weight</DialogTitle>
@@ -1594,61 +1886,76 @@ if (!response.ok) {
               step="0.1"
             />
           </div>
-          <Button onClick={handleWeightUpdate} disabled={!newWeight || isNaN(Number(newWeight)) || loading}>
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Submit"}
+          <Button
+            onClick={handleWeightUpdate}
+            disabled={!newWeight || isNaN(Number(newWeight)) || loading}
+          >
+            {loading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              "Submit"
+            )}
           </Button>
         </DialogContent>
       </Dialog>
-      <Dialog open={showHeightUpdateModal} onOpenChange={setShowHeightUpdateModal}>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>Update Height</DialogTitle>
-      <DialogDescription>
-        Enter your current height in centimeters.
-      </DialogDescription>
-    </DialogHeader>
-    <div className="space-y-4">
-      <Label htmlFor="new-height">Height (cm)</Label>
-      <Input
-        id="new-height"
-        type="number"
-        placeholder="e.g. 175"
-        value={newHeight}
-        onChange={(e) => setNewHeight(e.target.value)}
-        min="100"
-        max="250"
-        step="1"
-      />
-      <div className="text-xs text-muted-foreground">
-        Valid range: 100 – 250 cm
-      </div>
-    </div>
-    <div className="flex justify-end gap-3 mt-4">
-      <Button
-        variant="outline"
-        onClick={() => {
-          setShowHeightUpdateModal(false);
-          setNewHeight("");
-        }}
+      <Dialog
+        open={showHeightUpdateModal}
+        onOpenChange={setShowHeightUpdateModal}
       >
-        Cancel
-      </Button>
-      <Button
-        onClick={handleHeightUpdate}
-        disabled={!newHeight || Number(newHeight) < 100 || Number(newHeight) > 250 || loading}
-      >
-        {loading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Saving...
-          </>
-        ) : (
-          "Save Height"
-        )}
-      </Button>
-    </div>
-  </DialogContent>
-</Dialog>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Height</DialogTitle>
+            <DialogDescription>
+              Enter your current height in centimeters.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Label htmlFor="new-height">Height (cm)</Label>
+            <Input
+              id="new-height"
+              type="number"
+              placeholder="e.g. 175"
+              value={newHeight}
+              onChange={(e) => setNewHeight(e.target.value)}
+              min="100"
+              max="250"
+              step="1"
+            />
+            <div className="text-xs text-muted-foreground">
+              Valid range: 100 – 250 cm
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowHeightUpdateModal(false);
+                setNewHeight("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleHeightUpdate}
+              disabled={
+                !newHeight ||
+                Number(newHeight) < 100 ||
+                Number(newHeight) > 250 ||
+                loading
+              }
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Height"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showMissedDietModal} onOpenChange={setShowMissedDietModal}>
         <DialogContent>
@@ -1665,7 +1972,13 @@ if (!response.ok) {
                     {new Date(entry.date).toLocaleDateString()}
                   </div>
                   <div className="text-sm text-gray-500">
-                    {entry.meal}: {entry.items.map(item => `${Object.keys(item)[0]}: ${Object.values(item)[0]}`).join(", ")}
+                    {entry.meal}:{" "}
+                    {entry.items
+                      .map(
+                        (item) =>
+                          `${Object.keys(item)[0]}: ${Object.values(item)[0]}`
+                      )
+                      .join(", ")}
                     <XCircle className="inline h-4 w-4 text-red-500 ml-2" />
                   </div>
                 </div>
@@ -1675,7 +1988,10 @@ if (!response.ok) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showDietUpdateModal && userRole === 'nutritionist'} onOpenChange={setShowDietUpdateModal}>
+      <Dialog
+        open={showDietUpdateModal && userRole === "nutritionist"}
+        onOpenChange={setShowDietUpdateModal}
+      >
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Update Diet Plan</DialogTitle>
@@ -1704,17 +2020,34 @@ if (!response.ok) {
                   )}
                 </div>
                 {meal.items.map((item, itemIndex) => (
-                  <div key={itemIndex} className="flex items-center space-x-2 mt-2">
+                  <div
+                    key={itemIndex}
+                    className="flex items-center space-x-2 mt-2"
+                  >
                     <Input
                       placeholder="Item (e.g., Oats)"
                       value={item.name}
-                      onChange={(e) => updateMealItem(mealIndex, itemIndex, "name", e.target.value)}
+                      onChange={(e) =>
+                        updateMealItem(
+                          mealIndex,
+                          itemIndex,
+                          "name",
+                          e.target.value
+                        )
+                      }
                       className="flex-1"
                     />
                     <Input
                       placeholder="Quantity (e.g., 50g)"
                       value={item.quantity}
-                      onChange={(e) => updateMealItem(mealIndex, itemIndex, "quantity", e.target.value)}
+                      onChange={(e) =>
+                        updateMealItem(
+                          mealIndex,
+                          itemIndex,
+                          "quantity",
+                          e.target.value
+                        )
+                      }
                       className="flex-1"
                     />
                     {meal.items.length > 1 && (
@@ -1757,13 +2090,18 @@ if (!response.ok) {
                 variant="outline"
                 onClick={() => {
                   setShowDietUpdateModal(false);
-                  setNewDietPlan([{ name: "Meal 1", items: [{ name: "", quantity: "" }] }]);
+                  setNewDietPlan([
+                    { name: "Meal 1", items: [{ name: "", quantity: "" }] },
+                  ]);
                   setError(null);
                 }}
               >
                 Cancel
               </Button>
-              <Button onClick={handleUpdateDietPlan} disabled={updatingDietPlan}>
+              <Button
+                onClick={handleUpdateDietPlan}
+                disabled={updatingDietPlan}
+              >
                 {updatingDietPlan ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1780,19 +2118,36 @@ if (!response.ok) {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {showPlanSection && (
-          <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3 }} whileHover={{ scale: 1.02, y: -4 }} className=" cursor-pointer">
-            <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden
+          <motion.div
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.3 }}
+            whileHover={{ scale: 1.02, y: -4 }}
+            className=" cursor-pointer"
+          >
+            <Card
+              className="h-[190px] shadow-lg rounded-3xl overflow-hidden
                   bg-purple-50  
                    transition-all duration-300
                    border border-gray-100 
-                   hover:shadow-xl hover:scale-[1.005] hover:border-purple-300 dark:bg-[#0e182b] dark:border-none">
+                   hover:shadow-xl hover:scale-[1.005] hover:border-purple-300 dark:bg-[#0e182b] dark:border-none"
+            >
               <CardHeader className="pb-0">
-                <CardTitle className="flex items-center text-xl font-medium text-purple-500"><Target className="mr-2" /> Plan</CardTitle>
+                <CardTitle className="flex items-center text-xl font-medium text-purple-500">
+                  <Target className="mr-2" /> Plan
+                </CardTitle>
               </CardHeader>
               <CardContent className="pt-2">
-                <div className="text-sm text-muted-foreground">Selected plan</div>
-                <PlanExpirationReminder plan={profile?.plan} planStart={profile?.plan_start} />
-                <div className="mt-2 font-semibold text-lg">{profile?.plan ?? "No plan assigned"}</div>
+                <div className="text-sm text-muted-foreground">
+                  Selected plan
+                </div>
+                <PlanExpirationReminder
+                  plan={profile?.plan}
+                  planStart={profile?.plan_start}
+                />
+                <div className="mt-2 font-semibold text-lg">
+                  {profile?.plan ?? "No plan assigned"}
+                </div>
                 {profile?.plan_start && (
                   <Badge variant="secondary" className="mt-2">
                     Started: {new Date(profile.plan_start).toLocaleDateString()}
@@ -1805,23 +2160,42 @@ if (!response.ok) {
 
         {showWeightSection && (
           <>
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.1 }} whileHover={{ scale: 1.02, y: -4 }} className=" cursor-pointer">
-              <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              whileHover={{ scale: 1.02, y: -4 }}
+              className=" cursor-pointer"
+            >
+              <Card
+                className="h-[190px] shadow-lg rounded-3xl overflow-hidden
                   bg-indigo-50  
                    transition-all duration-300
                    border border-gray-100 
-                   hover:shadow-xl hover:scale-[1.005] hover:border-indigo-300 dark:bg-[#0e182b] dark:border-none">
+                   hover:shadow-xl hover:scale-[1.005] hover:border-indigo-300 dark:bg-[#0e182b] dark:border-none"
+              >
                 <CardHeader className="pb-0">
-                  <CardTitle className="flex items-center text-xl font-medium text-indigo-500"><Scale className="mr-2" /> Weight</CardTitle>
+                  <CardTitle className="flex items-center text-xl font-medium text-indigo-500">
+                    <Scale className="mr-2" /> Weight
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="text-sm text-muted-foreground">Latest</div>
                   <div className="flex justify-between items-center text-sm">
-                    <div className="mt-2 text-lg font-bold">{lastWeight ? `${lastWeight.weight_kg} kg` : "No data"}</div>
-                    <div className="text-xs text-muted-foreground items-center flex">{weightUpdatedAgo ? `Updated ${weightUpdatedAgo} ago` : "-"}</div>
+                    <div className="mt-2 text-lg font-bold">
+                      {lastWeight ? `${lastWeight.weight_kg} kg` : "No data"}
+                    </div>
+                    <div className="text-xs text-muted-foreground items-center flex">
+                      {weightUpdatedAgo
+                        ? `Updated ${weightUpdatedAgo} ago`
+                        : "-"}
+                    </div>
                     <div className="mt-2 flex">
-                      {(isOwnProfile || userRole === 'trainer') && (
-                        <Button variant="default" onClick={() => setShowWeightUpdateModal(true)}>
+                      {(isOwnProfile || userRole === "trainer") && (
+                        <Button
+                          variant="default"
+                          onClick={() => setShowWeightUpdateModal(true)}
+                        >
                           Track
                         </Button>
                       )}
@@ -1832,66 +2206,82 @@ if (!response.ok) {
             </motion.div>
 
             <motion.div
-  initial={{ scale: 0.95 }}
-  animate={{ scale: 1 }}
-  transition={{ duration: 0.3, delay: 0.2 }}
-  whileHover={{ scale: 1.02, y: -4 }}
-  className="cursor-pointer"
->
-  <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+              whileHover={{ scale: 1.02, y: -4 }}
+              className="cursor-pointer"
+            >
+              <Card
+                className="h-[190px] shadow-lg rounded-3xl overflow-hidden
       bg-teal-50
        transition-all duration-300
        border border-gray-100
-       hover:shadow-xl hover:scale-[1.005] hover:border-teal-300 dark:bg-[#0e182b] dark:border-none">
-    <CardHeader className="pb-0">
-      <CardTitle className="flex items-center text-xl font-medium text-teal-500">
-        <Ruler className="mr-2" /> Height
-      </CardTitle>
-    </CardHeader>
-    <CardContent className="pt-4">
-      <div className="text-sm text-muted-foreground mt-1">Current Height</div>
-      <div className="flex justify-between items-center text-sm">
-        <div className="mt-3 font-semibold text-lg">
-          {profile?.height_cm ? `${profile.height_cm} cm` : "—"}
-        </div>
-        <div className="mt-2 flex">
-          {(isOwnProfile || userRole === 'trainer') && (
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => {
-                setNewHeight(profile?.height_cm?.toString() || "");
-                setShowHeightUpdateModal(true);
-              }}
-            >
-              Update
-            </Button>
-          )}
-        </div>
-      </div>
-    </CardContent>
-  </Card>
-</motion.div>
+       hover:shadow-xl hover:scale-[1.005] hover:border-teal-300 dark:bg-[#0e182b] dark:border-none"
+              >
+                <CardHeader className="pb-0">
+                  <CardTitle className="flex items-center text-xl font-medium text-teal-500">
+                    <Ruler className="mr-2" /> Height
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="text-sm text-muted-foreground mt-1">
+                    Current Height
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <div className="mt-3 font-semibold text-lg">
+                      {profile?.height_cm ? `${profile.height_cm} cm` : "—"}
+                    </div>
+                    <div className="mt-2 flex">
+                      {(isOwnProfile || userRole === "trainer") && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => {
+                            setNewHeight(profile?.height_cm?.toString() || "");
+                            setShowHeightUpdateModal(true);
+                          }}
+                        >
+                          Update
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} transition={{ duration: 0.3, delay: 0.2 }} whileHover={{ scale: 1.02, y: -4 }} className=" cursor-pointer">
-              <Card className="h-[190px] shadow-lg rounded-3xl overflow-hidden
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+              whileHover={{ scale: 1.02, y: -4 }}
+              className=" cursor-pointer"
+            >
+              <Card
+                className="h-[190px] shadow-lg rounded-3xl overflow-hidden
                   bg-red-50  
                    transition-all duration-300
                    border border-gray-100 
-                   hover:shadow-xl hover:scale-[1.005] hover:border-red-300 dark:bg-[#0e182b] dark:border-none">
+                   hover:shadow-xl hover:scale-[1.005] hover:border-red-300 dark:bg-[#0e182b] dark:border-none"
+              >
                 <CardHeader className="pb-0">
-                  <CardTitle className="flex items-center text-xl font-medium text-red-400"><Ruler className="mr-2" /> BMI</CardTitle>
+                  <CardTitle className="flex items-center text-xl font-medium text-red-400">
+                    <Ruler className="mr-2" /> BMI
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="text-sm text-muted-foreground mt-1">BMI</div>
                   <div className="flex justify-between items-center text-sm mt-2">
                     <div className="flex items-center space-x-3">
                       <div className="font-semibold text-lg">
-                        {profile?.bmi != null && !Number.isNaN(Number(profile.bmi))
+                        {profile?.bmi != null &&
+                        !Number.isNaN(Number(profile.bmi))
                           ? Number(profile.bmi).toFixed(1)
                           : "—"}
                       </div>
-                      {profile?.bmi != null && !Number.isNaN(Number(profile.bmi)) && (
+                      {profile?.bmi != null &&
+                        !Number.isNaN(Number(profile.bmi)) &&
                         (() => {
                           const bmi = Number(profile.bmi);
                           let label = "—";
@@ -1917,11 +2307,11 @@ if (!response.ok) {
                               {label}
                             </span>
                           );
-                        })()
-                      )}
+                        })()}
                     </div>
                     <div className="text-xs text-muted-foreground items-center flex">
-                      <Activity className="mr-1" size={14} /> {profile?.activity_level ?? "—"}
+                      <Activity className="mr-1" size={14} />{" "}
+                      {profile?.activity_level ?? "—"}
                     </div>
                   </div>
                 </CardContent>
@@ -1931,438 +2321,552 @@ if (!response.ok) {
         )}
       </div>
       <div className="flex flex-col lg:flex-row gap-6">
-      {showWeightSection && userRole !== 'nutritionist' && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="w-full lg:w-1/2">
-          <Card className="shadow-lg rounded-xl overflow-hidden h-full">
-            <CardHeader >
-              <CardTitle className="flex items-center"><BarChart2 className="mr-2" /> Weight Tracking</CardTitle>
-              
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex items-center pb-4">
-              <User className="mr-2 text-yellow-400" /> Trainer: {trainer?.full_name ?? "Not assigned"}
-            </div>
-              <Suspense fallback={<Skeleton height={300} />}>
-              {weightHistory.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={weightHistory.map((d) => ({ 
-                    date: new Date(d.recorded_at).toLocaleDateString(), 
-                    weight: d.weight_kg,
-                    bmi: d.bmi 
-                  }))}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="date" />
-                    <YAxis />
-                    <Tooltip 
-                      contentStyle={{
-                        backgroundColor: 'white',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                      }}
-                    />
-                    <Legend />
-                    <Line 
-                      type="monotone" 
-                      dataKey="weight" 
-                      stroke="#f97316" 
-                      strokeWidth={3}
-                      activeDot={{ r: 8, fill: '#f97316' }} 
-                      name="Weight (kg)"
-                    />
-                    {weightHistory.some(d => d.bmi) && (
-                      <Line 
-                        type="monotone" 
-                        dataKey="bmi" 
-                        stroke="#3b82f6" 
-                        strokeWidth={2}
-                        activeDot={{ r: 6, fill: '#3b82f6' }} 
-                        name="BMI"
-                      />
-                    )}
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="text-center py-8">
-                  <BarChart2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-muted-foreground text-lg">No weight history available</p>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    {lastWeight ? `Last recorded: ${lastWeight.weight_kg}kg` : 'Start tracking your weight to see progress!'}
-                  </p>
+        {showWeightSection && userRole !== "nutritionist" && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="w-full lg:w-1/2"
+          >
+            <Card className="shadow-lg rounded-xl overflow-hidden h-full">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <BarChart2 className="mr-2" /> Weight Tracking
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="flex items-center pb-4">
+                  <User className="mr-2 text-yellow-400" /> Trainer:{" "}
+                  {trainer?.full_name ?? "Not assigned"}
                 </div>
-              )}
+                <Suspense fallback={<Skeleton height={300} />}>
+                  {weightHistory.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart
+                        data={weightHistory.map((d) => ({
+                          date: new Date(d.recorded_at).toLocaleDateString(),
+                          weight: d.weight_kg,
+                          bmi: d.bmi,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" />
+                        <YAxis />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "white",
+                            border: "1px solid #e5e7eb",
+                            borderRadius: "8px",
+                          }}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="weight"
+                          stroke="#f97316"
+                          strokeWidth={3}
+                          activeDot={{ r: 8, fill: "#f97316" }}
+                          name="Weight (kg)"
+                        />
+                        {weightHistory.some((d) => d.bmi) && (
+                          <Line
+                            type="monotone"
+                            dataKey="bmi"
+                            stroke="#3b82f6"
+                            strokeWidth={2}
+                            activeDot={{ r: 6, fill: "#3b82f6" }}
+                            name="BMI"
+                          />
+                        )}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="text-center py-8">
+                      <BarChart2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-muted-foreground text-lg">
+                        No weight history available
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        {lastWeight
+                          ? `Last recorded: ${lastWeight.weight_kg}kg`
+                          : "Start tracking your weight to see progress!"}
+                      </p>
+                    </div>
+                  )}
+                </Suspense>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {showDietSection && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="w-full lg:w-1/2"
+          >
+            <Card className="shadow-lg rounded-xl overflow-hidden">
+              <CardHeader>
+                <CardTitle className="flex items-center pt-2">
+                  <Apple className="mr-2" /> Meal Plan
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className="flex items-center justify-end mb-4 text-sm text-gray-600">
+                  Assigned Nutritionist:{" "}
+                  <span className="font-medium ml-1">
+                    {nutritionist?.full_name ?? "Not assigned"}
+                  </span>
+                </div>
+                <Suspense fallback={<Skeleton count={4} height={200} />}>
+                  {dietPlan &&
+                  dietPlan.diet_plan &&
+                  Object.keys(dietPlan.diet_plan).length > 0 ? (
+                    <div
+                      className={cn(
+                        "grid gap-4",
+                        Object.keys(dietPlan.diet_plan).length === 1
+                          ? "grid-cols-1"
+                          : Object.keys(dietPlan.diet_plan).length === 2
+                          ? "grid-cols-1 sm:grid-cols-2"
+                          : Object.keys(dietPlan.diet_plan).length === 3
+                          ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+                          : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                      )}
+                    >
+                      {Object.entries(dietPlan.diet_plan)
+                        .filter(([meal]) => todayMealStatus[meal] === undefined)
+                        .map(([meal, items], index) => {
+                          const mealCalories = items.reduce((sum, item) => {
+                            const foodName = Object.keys(item)[0];
+                            const nutrition = nutritionData.find(
+                              (n) =>
+                                n.food_name.toLowerCase() ===
+                                foodName.toLowerCase()
+                            );
+                            return sum + (nutrition?.calories || 0);
+                          }, 0);
+                          return (
+                            <motion.div
+                              key={meal}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: index * 0.1 }}
+                              className="rounded-xl overflow-hidden shadow-md bg-white flex flex-col"
+                            >
+                              <div className="relative w-full h-45">
+                                <Image
+                                  src={getMealImage(meal)}
+                                  alt={`${getMealName(meal)} image`}
+                                  fill
+                                  sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                                  className="object-cover"
+                                  priority={index < 4}
+                                />
+                                <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-xs">
+                                  {mealCalories.toFixed(0)} kcal
+                                </div>
+                              </div>
+                              <div className="p-4 flex-1">
+                                <div className="text-xs bg-teal-50 px-2 py-1 rounded-md mb-2 inline-block">
+                                  {getMealName(meal)}
+                                </div>
+                                <div className="text-sm text-gray-700">
+                                  {Array.isArray(items) && items.length > 0
+                                    ? items.map((item) => {
+                                        const foodName = Object.keys(item)[0];
+                                        const value = Object.values(item)[0];
+                                        const nutrition = nutritionData.find(
+                                          (n) =>
+                                            n.food_name.toLowerCase() ===
+                                            foodName.toLowerCase()
+                                        );
+                                        return (
+                                          <div key={foodName} className="mb-2">
+                                            {foodName && value
+                                              ? `${foodName}: ${value}`
+                                              : "Unknown Item"}
+                                            {nutrition ? (
+                                              <div className="text-xs text-gray-600">
+                                                {nutrition.calories.toFixed(0)}{" "}
+                                                kcal | P:
+                                                {nutrition.protein?.toFixed(1)}g
+                                                C:{nutrition.carbs?.toFixed(1)}g
+                                                F:{nutrition.fats?.toFixed(1)}g
+                                              </div>
+                                            ) : (
+                                              <AlertCircle className="h-3 w-3 inline ml-1 text-yellow-500" />
+                                            )}
+                                          </div>
+                                        );
+                                      })
+                                    : "No items specified"}
+                                </div>
+                                {isOwnProfile && (
+                                  <div className="mt-4 flex justify-end space-x-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        handleMealIntake(meal, true)
+                                      }
+                                      disabled={updatingMeal === meal}
+                                      className="text-green-600 hover:bg-green-50"
+                                    >
+                                      {updatingMeal === meal ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <CheckCircle className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        handleMealIntake(meal, false)
+                                      }
+                                      disabled={updatingMeal === meal}
+                                      className="text-red-600 hover:bg-red-50"
+                                    >
+                                      {updatingMeal === meal ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <XCircle className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground italic text-center py-8">
+                      No diet plan assigned yet
+                      {userRole === "nutritionist" && (
+                        <Button
+                          variant="default"
+                          onClick={() => setShowDietUpdateModal(true)}
+                          className="ml-4"
+                        >
+                          Assign Diet Plan
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {dietPlan &&
+                    dietPlan.diet_plan &&
+                    Object.keys(dietPlan.diet_plan).length > 0 && (
+                      <>
+                        {userRole === "nutritionist" && (
+                          <Button
+                            variant="default"
+                            onClick={() => {
+                              setNewDietPlan(
+                                Object.entries(dietPlan.diet_plan).map(
+                                  ([meal, items]) => ({
+                                    name: meal,
+                                    items: items.map((item) => ({
+                                      name: Object.keys(item)[0],
+                                      quantity: Object.values(item)[0],
+                                    })),
+                                  })
+                                )
+                              );
+                              setShowDietUpdateModal(true);
+                            }}
+                            className="mt-4"
+                          >
+                            Update Diet Plan
+                          </Button>
+                        )}
+                        {Object.keys(todayMealStatus).length ===
+                        Object.keys(dietPlan.diet_plan).length ? (
+                          <p className="text-muted-foreground text-center mt-4">
+                            All meals for today have been marked.
+                          </p>
+                        ) : (
+                          <div className="text-xs text-gray-500 mt-4 text-right">
+                            Updated{" "}
+                            {formatDistanceToNowStrict(
+                              new Date(dietPlan.updated_at)
+                            )}{" "}
+                            ago
+                          </div>
+                        )}
+                      </>
+                    )}
+                  <div className="mt-8">
+                    <h2 className="text-lg font-bold text-gray-800 flex items-center mb-4">
+                      <BarChart2 className="mr-2 h-5 w-5 text-teal-600" /> Daily
+                      Nutrition Totals
+                    </h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                      <div>
+                        <div className="text-2xl font-bold text-teal-600">
+                          {dailyTotals.calories.toFixed(0)}
+                        </div>
+                        <div className="text-xs text-gray-600">Calories</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-blue-600">
+                          {dailyTotals.protein.toFixed(1)}
+                        </div>
+                        <div className="text-xs text-gray-600">Protein (g)</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-amber-600">
+                          {dailyTotals.carbs.toFixed(1)}
+                        </div>
+                        <div className="text-xs text-gray-600">Carbs (g)</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-red-600">
+                          {dailyTotals.fats.toFixed(1)}
+                        </div>
+                        <div className="text-xs text-gray-600">Fats (g)</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-8">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-lg font-bold text-gray-800 flex items-center">
+                        <BarChart2 className="mr-2 h-5 w-5 text-teal-600" />{" "}
+                        Track your diet
+                      </h2>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowMissedDietModal(true)}
+                      >
+                        View Missed Meals
+                      </Button>
+                    </div>
+                    {dietHistory.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-4">
+                        No diet history available.
+                      </p>
+                    ) : (
+                      <Accordion
+                        type="single"
+                        collapsible
+                        className="w-full mt-4"
+                      >
+                        {dietHistory.map((history) => (
+                          <AccordionItem key={history.id} value={history.id}>
+                            <AccordionTrigger className="text-sm font-semibold">
+                              {new Date(history.date).toLocaleDateString()}
+                            </AccordionTrigger>
+                            <AccordionContent>
+                              <div className="space-y-2 text-sm text-gray-600">
+                                {Object.entries(history.intake).map(
+                                  ([meal, taken]) => (
+                                    <div
+                                      key={meal}
+                                      className="flex items-center"
+                                    >
+                                      <span className="font-medium">
+                                        {getMealName(meal)}:
+                                      </span>
+                                      <span className="ml-2 flex items-center">
+                                        {taken ? (
+                                          <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                                        ) : (
+                                          <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                                        )}
+                                        {dietPlan?.diet_plan[meal]
+                                          ?.map((item) => {
+                                            const key = Object.keys(item)[0];
+                                            const value =
+                                              Object.values(item)[0];
+                                            return key && value
+                                              ? `${key}: ${value}`
+                                              : "Unknown Item";
+                                          })
+                                          .join(", ") || "No items"}
+                                      </span>
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        ))}
+                      </Accordion>
+                    )}
+                  </div>
+                </Suspense>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </div>
+
+      <div className="  space-y-6">
+        <Card className="shadow-lg  flex flex-col lg:flex-row gap-6 px-5">
+          <Suspense fallback={<Skeleton height={300} />}>
+            <WorkoutTracker latestPlan={latestPlan} memberId={memberId || ""} />
+          </Suspense>
+          <Card className="shadow-lg lg:w-[65%] w-full">
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold">
+                Workout Progress History
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center mb-4">
+                <Select value={selectedRange} onValueChange={handleRangeChange}>
+                  <SelectTrigger className="w-[180px] border-blue-200 focus:ring-blue-500">
+                    <SelectValue placeholder="Select range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rangeOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedRange === "custom" && (
+                  <div className="ml-4 flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={customNumber}
+                      onChange={(e) => setCustomNumber(e.target.value)}
+                      className="w-20 border-blue-200 focus:ring-blue-500"
+                      min="1"
+                    />
+                    <Select value={customUnit} onValueChange={setCustomUnit}>
+                      <SelectTrigger className="w-[120px] border-blue-200 focus:ring-blue-500">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="days">Days</SelectItem>
+                        <SelectItem value="weeks">Weeks</SelectItem>
+                        <SelectItem value="months">Months</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              <Suspense fallback={<Skeleton height={400} />}>
+                {workoutHistory.length === 0 ? (
+                  <p className="text-center text-gray-500">
+                    No workout history available for the selected range.
+                  </p>
+                ) : (
+                  <div className="flex gap-6">
+                    {/* Table */}
+                    <div className="w-1/2">
+                      <ScrollArea className="h-[300px] w-full rounded-md border border-gray-200">
+                        <Table>
+                          <TableHeader className="sticky top-0 bg-white shadow-sm">
+                            <TableRow>
+                              <TableHead className="w-[60px]">#</TableHead>
+                              <TableHead>Workout</TableHead>
+                              <TableHead>Progress</TableHead>
+                              <TableHead>Date</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {workoutHistory.map((item: any, index: number) => (
+                              <TableRow
+                                key={item.id}
+                                className="hover:bg-gray-50"
+                              >
+                                <TableCell>{index + 1}</TableCell>
+                                <TableCell className="max-w-[150px] truncate">
+                                  {getExerciseNames(item.workout)}
+                                </TableCell>
+                                <TableCell>
+                                  <Suspense
+                                    fallback={
+                                      <Skeleton circle width={40} height={40} />
+                                    }
+                                  >
+                                    <DonutChart
+                                      percentage={item.completion_percentage}
+                                    />
+                                  </Suspense>
+                                </TableCell>
+                                <TableCell>
+                                  {new Date(
+                                    item.recorded_at
+                                  ).toLocaleDateString()}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </ScrollArea>
+                    </div>
+                    {/* Overall Progress */}
+                    <div className="w-1/2 flex flex-col items-center justify-center">
+                      <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                        Overall Progress
+                      </h3>
+                      <Suspense
+                        fallback={<Skeleton circle width={150} height={150} />}
+                      >
+                        <AnimatedDonutChart percentage={overallProgress} />
+                      </Suspense>
+                      <p className="mt-4 text-sm text-gray-500">
+                        Average completion: {overallProgress}%
+                      </p>
+                    </div>
+                  </div>
+                )}
               </Suspense>
             </CardContent>
           </Card>
-        </motion.div>
-      )}
-
-      {showDietSection && (
-  <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="w-full lg:w-1/2">
-    <Card className="shadow-lg rounded-xl overflow-hidden">
-      <CardHeader>
-        <CardTitle className="flex items-center pt-2"><Apple className="mr-2" /> Meal Plan</CardTitle>
-      </CardHeader>
-      <CardContent className="pt-4">
-        <div className="flex items-center justify-end mb-4 text-sm text-gray-600">
-          Assigned Nutritionist: <span className="font-medium ml-1">{nutritionist?.full_name ?? "Not assigned"}</span>
-        </div>
-        <Suspense fallback={<Skeleton count={4} height={200} />}>
-          {dietPlan && dietPlan.diet_plan && Object.keys(dietPlan.diet_plan).length > 0 ? (
-            <div className={cn(
-              "grid gap-4",
-              Object.keys(dietPlan.diet_plan).length === 1 ? "grid-cols-1" :
-              Object.keys(dietPlan.diet_plan).length === 2 ? "grid-cols-1 sm:grid-cols-2" :
-              Object.keys(dietPlan.diet_plan).length === 3 ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3" :
-              "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
-            )}>
-              {Object.entries(dietPlan.diet_plan)
-                .filter(([meal]) => todayMealStatus[meal] === undefined)
-                .map(([meal, items], index) => {
-                  const mealCalories = items.reduce((sum, item) => {
-                    const foodName = Object.keys(item)[0];
-                    const nutrition = nutritionData.find(n => n.food_name.toLowerCase() === foodName.toLowerCase());
-                    return sum + (nutrition?.calories || 0);
-                  }, 0);
-                  return (
-                    <motion.div
-                      key={meal}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="rounded-xl overflow-hidden shadow-md bg-white flex flex-col"
-                    >
-                      <div className="relative w-full h-45">
-                        <Image
-                          src={getMealImage(meal)}
-                          alt={`${getMealName(meal)} image`}
-                          fill
-                          sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                          className="object-cover"
-                          priority={index < 4}
-                        />
-                        <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 rounded text-xs">
-                          {mealCalories.toFixed(0)} kcal
-                        </div>
-                      </div>
-                      <div className="p-4 flex-1">
-                        <div className="text-xs bg-teal-50 px-2 py-1 rounded-md mb-2 inline-block">
-                          {getMealName(meal)}
-                        </div>
-                        <div className="text-sm text-gray-700">
-                          {Array.isArray(items) && items.length > 0
-                            ? items.map(item => {
-                                const foodName = Object.keys(item)[0];
-                                const value = Object.values(item)[0];
-                                const nutrition = nutritionData.find(n => n.food_name.toLowerCase() === foodName.toLowerCase());
-                                return (
-                                  <div key={foodName} className="mb-2">
-                                    {foodName && value ? `${foodName}: ${value}` : 'Unknown Item'}
-                                    {nutrition ? (
-                                      <div className="text-xs text-gray-600">
-                                        {nutrition.calories.toFixed(0)} kcal | P:{nutrition.protein?.toFixed(1)}g C:{nutrition.carbs?.toFixed(1)}g F:{nutrition.fats?.toFixed(1)}g
-                                      </div>
-                                    ) : (
-                                      <AlertCircle className="h-3 w-3 inline ml-1 text-yellow-500"  />
-                                    )}
-                                  </div>
-                                );
-                              })
-                            : 'No items specified'}
-                        </div>
-                        {isOwnProfile && (
-                          <div className="mt-4 flex justify-end space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleMealIntake(meal, true)}
-                              disabled={updatingMeal === meal}
-                              className="text-green-600 hover:bg-green-50"
-                            >
-                              {updatingMeal === meal ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <CheckCircle className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleMealIntake(meal, false)}
-                              disabled={updatingMeal === meal}
-                              className="text-red-600 hover:bg-red-50"
-                            >
-                              {updatingMeal === meal ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <XCircle className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  );
-                })}
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground italic text-center py-8">
-              No diet plan assigned yet
-              {userRole === 'nutritionist' && (
-                <Button
-                  variant="default"
-                  onClick={() => setShowDietUpdateModal(true)}
-                  className="ml-4"
-                >
-                  Assign Diet Plan
-                </Button>
-              )}
-            </div>
-          )}
-          {dietPlan && dietPlan.diet_plan && Object.keys(dietPlan.diet_plan).length > 0 && (
-            <>
-              {userRole === 'nutritionist' && (
-                <Button
-                  variant="default"
-                  onClick={() => {
-                    setNewDietPlan(
-                      Object.entries(dietPlan.diet_plan).map(([meal, items]) => ({
-                        name: meal,
-                        items: items.map(item => ({
-                          name: Object.keys(item)[0],
-                          quantity: Object.values(item)[0],
-                        })),
-                      }))
-                    );
-                    setShowDietUpdateModal(true);
-                  }}
-                  className="mt-4"
-                >
-                  Update Diet Plan
-                </Button>
-              )}
-              {Object.keys(todayMealStatus).length === Object.keys(dietPlan.diet_plan).length ? (
-                <p className="text-muted-foreground text-center mt-4">All meals for today have been marked.</p>
-              ) : (
-                <div className="text-xs text-gray-500 mt-4 text-right">
-                  Updated {formatDistanceToNowStrict(new Date(dietPlan.updated_at))} ago
-                </div>
-              )}
-            </>
-          )}
-          <div className="mt-8">
-            <h2 className="text-lg font-bold text-gray-800 flex items-center mb-4">
-              <BarChart2 className="mr-2 h-5 w-5 text-teal-600" /> Daily Nutrition Totals
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div>
-                <div className="text-2xl font-bold text-teal-600">{dailyTotals.calories.toFixed(0)}</div>
-                <div className="text-xs text-gray-600">Calories</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-blue-600">{dailyTotals.protein.toFixed(1)}</div>
-                <div className="text-xs text-gray-600">Protein (g)</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-amber-600">{dailyTotals.carbs.toFixed(1)}</div>
-                <div className="text-xs text-gray-600">Carbs (g)</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-red-600">{dailyTotals.fats.toFixed(1)}</div>
-                <div className="text-xs text-gray-600">Fats (g)</div>
-              </div>
-            </div>
-          </div>
-          <div className="mt-8">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-gray-800 flex items-center">
-                <BarChart2 className="mr-2 h-5 w-5 text-teal-600" /> Track your diet
-              </h2>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowMissedDietModal(true)}
-              >
-                View Missed Meals
-              </Button>
-            </div>
-            {dietHistory.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">No diet history available.</p>
-            ) : (
-              <Accordion type="single" collapsible className="w-full mt-4">
-                {dietHistory.map(history => (
-                  <AccordionItem key={history.id} value={history.id}>
-                    <AccordionTrigger className="text-sm font-semibold">
-                      {new Date(history.date).toLocaleDateString()}
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="space-y-2 text-sm text-gray-600">
-                        {Object.entries(history.intake).map(([meal, taken]) => (
-                          <div key={meal} className="flex items-center">
-                            <span className="font-medium">{getMealName(meal)}:</span>
-                            <span className="ml-2 flex items-center">
-                              {taken ? <CheckCircle className="h-4 w-4 text-green-500 mr-1" /> : <XCircle className="h-4 w-4 text-red-500 mr-1" />}
-                              {dietPlan?.diet_plan[meal]?.map(item => {
-                                const key = Object.keys(item)[0];
-                                const value = Object.values(item)[0];
-                                return key && value ? `${key}: ${value}` : 'Unknown Item';
-                              }).join(", ") || 'No items'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            )}
-          </div>
-        </Suspense>
-      </CardContent>
-    </Card>
-  </motion.div>
-)}
+        </Card>
       </div>
-
-      
-    <div className="  space-y-6">
-  
-      <Card className="shadow-lg  flex flex-col lg:flex-row gap-6 px-5">
-          <Suspense fallback={<Skeleton height={300} />}>
-          <WorkoutTracker latestPlan={latestPlan} memberId={memberId || '' } />
-          </Suspense>
-        <Card className="shadow-lg lg:w-[65%] w-full">
-        <CardHeader>
-          <CardTitle className="text-xl font-semibold">Workout Progress History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center mb-4">
-            <Select value={selectedRange} onValueChange={handleRangeChange}>
-              <SelectTrigger className="w-[180px] border-blue-200 focus:ring-blue-500">
-                <SelectValue placeholder="Select range" />
-              </SelectTrigger>
-              <SelectContent>
-                {rangeOptions.map(opt => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedRange === 'custom' && (
-              <div className="ml-4 flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={customNumber}
-                  onChange={e => setCustomNumber(e.target.value)}
-                  className="w-20 border-blue-200 focus:ring-blue-500"
-                  min="1"
-                />
-                <Select value={customUnit} onValueChange={setCustomUnit}>
-                  <SelectTrigger className="w-[120px] border-blue-200 focus:ring-blue-500">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="days">Days</SelectItem>
-                    <SelectItem value="weeks">Weeks</SelectItem>
-                    <SelectItem value="months">Months</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-          
-          <Suspense fallback={<Skeleton height={400} />}>
-              {workoutHistory.length === 0 ? (
-                <p className="text-center text-gray-500">No workout history available for the selected range.</p>
-              ) : (
-                <div className="flex gap-6">
-                  {/* Table */}
-                  <div className="w-1/2">
-                    <ScrollArea className="h-[300px] w-full rounded-md border border-gray-200">
-                      <Table>
-                        <TableHeader className="sticky top-0 bg-white shadow-sm">
-                          <TableRow>
-                            <TableHead className="w-[60px]">#</TableHead>
-                            <TableHead>Workout</TableHead>
-                            <TableHead>Progress</TableHead>
-                            <TableHead>Date</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {workoutHistory.map((item: any, index: number) => (
-                            <TableRow key={item.id} className="hover:bg-gray-50">
-                              <TableCell>{index + 1}</TableCell>
-                              <TableCell className="max-w-[150px] truncate">{getExerciseNames(item.workout)}</TableCell>
-                              <TableCell>
-                                <Suspense fallback={<Skeleton circle width={40} height={40} />}>
-                                  <DonutChart percentage={item.completion_percentage} />
-                                </Suspense>
-                              </TableCell>
-                              <TableCell>{new Date(item.recorded_at).toLocaleDateString()}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </ScrollArea>
-                  </div>
-                  {/* Overall Progress */}
-                  <div className="w-1/2 flex flex-col items-center justify-center">
-                    <h3 className="text-lg font-semibold text-gray-800 mb-4">Overall Progress</h3>
-                    <Suspense fallback={<Skeleton circle width={150} height={150} />}>
-                      <AnimatedDonutChart percentage={overallProgress} />
-                    </Suspense>
-                    <p className="mt-4 text-sm text-gray-500">
-                      Average completion: {overallProgress}%
-                    </p>
-                  </div>
-                </div>
-                
-              )}
-            </Suspense>
-        </CardContent>
-      </Card>
-      </Card>
-    </div>
-    {showPhotoGallery && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
+      {showPhotoGallery && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+        >
           <Card className="shadow-lg rounded-xl overflow-hidden">
             <CardHeader className="bg-gradient-to-r from-indigo-200 to-indigo-300">
-              <CardTitle className="flex items-center"><ImageIcon className="mr-2" /> Photo Gallery</CardTitle>
+              <CardTitle className="flex items-center">
+                <ImageIcon className="mr-2" /> Photo Gallery
+              </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4">
+
+            <CardContent className="pt-4 flex flex-row flex-wrap gap-4">
               <Suspense fallback={<Skeleton count={4} height={200} />}>
-              {galleryPhotos.length === 0 ? (
-                <p className="text-muted-foreground">No photos uploaded yet.</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-7 gap-2">
-                  {galleryPhotos.map((photo) => (
-                    <div key={photo.id} className="relative">
-                      <img src={photo.photo} alt="Gallery photo" className="h-48 rounded-lg" />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatDistanceToNowStrict(new Date(photo.date))} ago
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {isOwnProfile && canUploadPhoto && (
-                <div className="mt-4">
-                  <Label htmlFor="photo-upload" className="cursor-pointer">
-                    <Button variant="default" disabled={uploading} asChild>
-                      <label htmlFor="photo-upload">
-                        {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                        {uploading ? "Uploading..." : "Upload New Photo"}
-                      </label>
-                    </Button>
-                  </Label>
-                  <Input
-                    id="photo-upload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => e.target.files?.[0] && handlePhotoUpload(e.target.files[0])}
-                  />
-                </div>
+                {isOwnProfile && canUploadPhoto && (
+                  <div className="mb-4">
+                    <FileUpload onChange={handleFileUpload} />
+                  </div>
                 )}
 
+                {galleryPhotos.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    No photos uploaded yet.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2 items-start">
+                    {galleryPhotos.map((photo) => (
+                      <div key={photo.id} className="relative w-44 h-44">
+                        <Image
+                          src={photo.photo}
+                          alt="Gallery photo"
+                          fill
+                          className="rounded-lg object-cover"
+                          sizes="96px"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {formatDistanceToNowStrict(new Date(photo.date))} ago
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Suspense>
             </CardContent>
           </Card>
@@ -2371,9 +2875,6 @@ if (!response.ok) {
     </motion.div>
   );
 }
-
-
-
 
 // "use client";
 
@@ -2421,10 +2922,10 @@ if (!response.ok) {
 // };
 
 // export default function MemberDashboardPage() {
-  
+
 //   const router = useRouter();
 //   const params = useParams();
-// const memberId = params.memberID as string;  
+// const memberId = params.memberID as string;
 
 //   const [profile, setProfile] = useState<MemberProfile | null>(null);
 //   const [weightHistory, setWeightHistory] = useState<WeightHistory[]>([]);
@@ -2600,7 +3101,7 @@ if (!response.ok) {
 //         if (!mp?.height_cm || !mp?.weight_kg || !mp?.bmi || !mp?.gender || !mp?.goal || !mp?.activity_level) {
 //         setShowSetupModal(true);
 //       }
-     
+
 //       } catch (err) {
 //         console.error("Error loading member dashboard:", err);
 //       } finally {
@@ -2663,7 +3164,7 @@ if (!response.ok) {
 //     }
 
 //     setLoading(true);
-    
+
 //     try {
 //       const { data: { session } } = await supabase.auth.getSession();
 //       if (!session?.access_token) {
@@ -2785,7 +3286,7 @@ if (!response.ok) {
 //                 Back
 //               </Button>
 //             )}
-            
+
 //             <Button
 //               disabled={!steps[currentStep].isValid() || loading}
 //               onClick={() => {
@@ -2880,8 +3381,7 @@ if (!response.ok) {
 //             <CardContent className="pt-4">
 //               <div className="text-sm text-muted-foreground mt-1">Height</div>
 //               <div className="mt-3 font-semibold">{profile?.height_cm ? `${profile.height_cm} cm` : "—"}</div>
-              
-              
+
 //             </CardContent>
 //           </Card>
 //         </motion.div>
@@ -2901,7 +3401,7 @@ if (!response.ok) {
 //           <Activity className="mr-1" size={14} /> {profile?.activity_level ?? "—"}
 //         </div>
 //       </div>
-      
+
 //     </CardContent>
 //   </Card>
 // </motion.div>
@@ -2950,10 +3450,6 @@ if (!response.ok) {
 //         </Card>
 //       </motion.div>
 
-      
 //     </motion.div>
 //   );
 // }
-
-
-
