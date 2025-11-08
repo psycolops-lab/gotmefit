@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect,  useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import {
   Table,
@@ -116,17 +116,26 @@ export default function NutritionistDashboardPage() {
   const [currentMealIndex, setCurrentMealIndex] = useState<number>(0);
   const router = useRouter();
   const [isUpdateToday, setIsUpdateToday] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     loadMembers();
     fetchAppointments();
   }, []);
+  useEffect(() => {
+  const getUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) setUserId(user.id);
+  };
+  getUser();
+}, []);
 
   // === FETCH APPOINTMENTS ===
   async function fetchAppointments() {
     const { data, error } = await supabase
       .from("appointments")
       .select("*, appointment_notes(notes)")
+      .eq("host_id", userId)
       .order("start_time", { ascending: false });
 
     if (!error) setAppointments(data || []);
